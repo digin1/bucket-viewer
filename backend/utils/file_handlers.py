@@ -36,7 +36,7 @@ def get_file_preview(file_path, extension):
         if file_type == 'text':
             return get_text_preview(file_path, extension)
         elif file_type == 'image':
-            return get_image_preview(file_path)
+            return get_image_preview(file_path, extension)
         elif file_type == 'document':
             if extension == 'docx':
                 return get_docx_preview(file_path)
@@ -106,10 +106,31 @@ def get_text_preview(file_path, extension):
             'preview': 'This appears to be a binary file and cannot be previewed as text'
         }
 
-def get_image_preview(file_path):
+def get_image_preview(file_path, extension):
     """Get preview for image files"""
     try:
-        # Open image and convert to base64 for frontend display
+        # Special handling for TIF/TIFF files
+        if extension.lower() in ['tif', 'tiff']:
+            with Image.open(file_path) as img:
+                # Convert TIFF to PNG for web display
+                # Resize very large images for preview
+                max_size = (800, 800)
+                if img.width > max_size[0] or img.height > max_size[1]:
+                    img.thumbnail(max_size, Image.LANCZOS)
+                
+                # Save to bytes as PNG
+                import io
+                buffer = io.BytesIO()
+                img.save(buffer, format='PNG')
+                img_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                
+                return {
+                    'type': 'image',
+                    'preview': img_str,
+                    'mime': 'image/png'  # Always use PNG for TIFFs
+                }
+        
+        # Regular handling for other image types
         with Image.open(file_path) as img:
             # Resize very large images for preview
             max_size = (800, 800)
@@ -121,12 +142,12 @@ def get_image_preview(file_path):
             buffer = io.BytesIO()
             img.save(buffer, format=img.format or 'PNG')
             img_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        
-        return {
-            'type': 'image',
-            'preview': img_str,
-            'mime': f'image/{img.format.lower() if img.format else "png"}'
-        }
+            
+            return {
+                'type': 'image',
+                'preview': img_str,
+                'mime': f'image/{img.format.lower() if img.format else "png"}'
+            }
     except Exception as e:
         return {
             'type': 'error',

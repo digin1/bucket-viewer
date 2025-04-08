@@ -8,7 +8,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPath, setCurrentPath] = useState('');
   const [config, setConfig] = useState(null);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(true); // Show config panel by default
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -95,7 +95,7 @@ function App() {
       )}
       
       {/* Main content when config is loaded */}
-      {!isLoading && !error && config && (
+      {!isLoading && !error && config && !isConfigOpen && (
         <div className="flex flex-1 overflow-hidden">
           {/* Left sidebar - Bucket Explorer */}
           <div className="w-1/3 border-r border-gray-200 bg-white overflow-auto">
@@ -121,7 +121,12 @@ function App() {
         <ConfigPanel 
           config={config}
           onSave={saveConfig}
-          onCancel={() => setIsConfigOpen(false)}
+          onCancel={() => {
+            // Only allow closing the config panel if we already have a valid config
+            if (config && config.bucket_name) {
+              setIsConfigOpen(false);
+            }
+          }}
         />
       )}
       
