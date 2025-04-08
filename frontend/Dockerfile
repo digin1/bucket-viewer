@@ -2,10 +2,18 @@ FROM node:16-alpine as build
 
 WORKDIR /app
 
+# Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
+# Ensure the public directory exists
+RUN mkdir -p public
+
+# Copy all frontend files
 COPY . .
+
+# Ensure the public directory has required files
+RUN touch public/favicon.ico
 RUN npm run build
 
 # Production stage
