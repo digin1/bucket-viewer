@@ -120,7 +120,7 @@ function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [currentPath]);
 
   // Save configuration
   const saveConfig = async (newConfig) => {

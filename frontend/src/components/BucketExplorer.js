@@ -89,7 +89,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [currentPath]);
+  }, [currentPath, fetchBucketContent]);
   
   // Update breadcrumbs based on current path
   const updateBreadcrumbs = (path) => {
@@ -120,14 +120,14 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
       fetchBucketContent(pathFromUrl || currentPath);
       setInitialLoad(false);
     }
-  }, [s3Initialized, initialLoad, currentPath]);
+  }, [s3Initialized, initialLoad, currentPath, fetchBucketContent]);
   
   // React to changes in currentPath from parent component
   useEffect(() => {
     if (!initialLoad && s3Initialized && currentPath !== undefined) {
       fetchBucketContent(currentPath);
     }
-  }, [currentPath, initialLoad, s3Initialized]);
+  }, [currentPath, initialLoad, s3Initialized, fetchBucketContent]);
   
   // Handle folder click
   const handleFolderClick = (folderPath) => {

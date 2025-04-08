@@ -1,6 +1,5 @@
 // src/services/FileProcessor.js
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 
 class FileProcessor {
   /**
@@ -27,6 +26,8 @@ class FileProcessor {
             };
           }
           break;
+        default:
+          break;  
       }
       
       // Default for unsupported types
