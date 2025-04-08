@@ -89,6 +89,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, fetchBucketContent]);
   
   // Update breadcrumbs based on current path
@@ -120,6 +121,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
       fetchBucketContent(pathFromUrl || currentPath);
       setInitialLoad(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s3Initialized, initialLoad, currentPath, fetchBucketContent]);
   
   // React to changes in currentPath from parent component
@@ -127,6 +129,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     if (!initialLoad && s3Initialized && currentPath !== undefined) {
       fetchBucketContent(currentPath);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, initialLoad, s3Initialized, fetchBucketContent]);
   
   // Handle folder click
