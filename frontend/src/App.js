@@ -3,7 +3,7 @@ import BucketExplorer from './components/BucketExplorer';
 import FileViewer from './components/FileViewer';
 import ConfigPanel from './components/ConfigPanel';
 import SyncCommandBox from './components/SyncCommandBox';
-import axios from 'axios';
+import s3Service from './services/S3Service';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -25,7 +25,7 @@ function App() {
 
   // Load configuration on component mount
   useEffect(() => {
-    const fetchConfig = async () => {
+    const loadConfig = async () => {
       try {
         setIsLoading(true);
 
@@ -33,22 +33,37 @@ function App() {
         const { endpoint, bucket, path } = getUrlParams();
 
         // If we have endpoint and bucket in URL, use these
-        let url = '/api/config';
         if (endpoint && bucket) {
-          url += `?endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
-          // Set isConfigOpen to false as we have valid parameters
+          const newConfig = {
+            endpoint_url: endpoint,
+            bucket_name: bucket
+          };
+          
+          // Initialize S3 service with the config
+          s3Service.initialize(newConfig);
+          
+          setConfig(newConfig);
           setIsConfigOpen(false);
+          
+          // Set initial path from URL if provided
+          if (path) {
+            setCurrentPath(path);
+          }
         } else {
-          // If no URL params, show config panel by default
-          setIsConfigOpen(true);
-        }
-
-        const response = await axios.get(url);
-        setConfig(response.data);
-
-        // Set initial path from URL if provided
-        if (path) {
-          setCurrentPath(path);
+          // Load from localStorage if available
+          const savedConfig = localStorage.getItem('s3ViewerConfig');
+          if (savedConfig) {
+            const parsedConfig = JSON.parse(savedConfig);
+            
+            // Initialize S3 service with the saved config
+            s3Service.initialize(parsedConfig);
+            
+            setConfig(parsedConfig);
+            setIsConfigOpen(false);
+          } else {
+            // Show config panel by default if no config is found
+            setIsConfigOpen(true);
+          }
         }
 
         setError(null);
@@ -62,7 +77,7 @@ function App() {
       }
     };
 
-    fetchConfig();
+    loadConfig();
     
     // Add event listener for URL changes (popstate)
     const handlePopState = () => {
@@ -86,9 +101,16 @@ function App() {
   const saveConfig = async (newConfig) => {
     try {
       setIsLoading(true);
-      await axios.post('/api/config', newConfig);
+      
+      // Initialize S3 service with the new config
+      s3Service.initialize(newConfig);
+      
+      // Save to localStorage
+      localStorage.setItem('s3ViewerConfig', JSON.stringify(newConfig));
+      
       setConfig(newConfig);
       setIsConfigOpen(false);
+      
       // Reset selected file and path for new bucket
       setSelectedFile(null);
       setCurrentPath('');
@@ -207,7 +229,8 @@ function App() {
       )}
 
       <footer className="bg-gray-200 px-4 py-2 text-sm text-gray-600">
-        <div className="flex items-center">
+        <div className="flex items-center justify-between">
+          <span>S3 Bucket Viewer (GitHub Pages Version)</span>
           <a
             href="https://github.com/digin1/s3-bucket-viewer"
             target="_blank"

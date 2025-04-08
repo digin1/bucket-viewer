@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import s3Service from '../services/S3Service';
 
 function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   const [bucketContent, setBucketContent] = useState({ folders: [], files: [] });
@@ -8,25 +8,21 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [initialLoad, setInitialLoad] = useState(true);
   
-  // Fetch data from the API
+  // Fetch data from S3
   const fetchBucketContent = async (prefix = '') => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Get URL parameters to pass along
-      const urlParams = new URLSearchParams(window.location.search);
-      const endpoint = urlParams.get('endpoint');
-      const bucket = urlParams.get('bucket');
-      
-      // Build the URL with parameters if they exist
-      let url = `/api/list?prefix=${encodeURIComponent(prefix)}`;
-      if (endpoint && bucket) {
-        url += `&endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
+      // Check if S3 service is initialized
+      if (!s3Service.isInitialized()) {
+        setError('S3 service not initialized. Please configure bucket settings first.');
+        setIsLoading(false);
+        return;
       }
       
-      const response = await axios.get(url);
-      setBucketContent(response.data);
+      const response = await s3Service.listObjects(prefix);
+      setBucketContent(response);
       onPathChange(prefix);
       
       // Update breadcrumbs
@@ -35,12 +31,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       // Update the browser URL to include the path
       updateBrowserUrl(prefix);
     } catch (err) {
-      if (err.response?.status === 403) {
+      if (err.code === 'AccessDenied') {
         setError('Access denied. Please check your credentials in Settings.');
-      } else if (err.response?.status === 404) {
+      } else if (err.code === 'NoSuchBucket') {
         setError('Bucket not found. Please check your bucket name in Settings.');
       } else {
-        setError('Failed to load bucket content: ' + (err.response?.data?.error || err.message));
+        setError('Failed to load bucket content: ' + err.message);
       }
       console.error(err);
     } finally {

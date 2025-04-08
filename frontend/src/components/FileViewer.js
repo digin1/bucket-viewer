@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import TextViewer from './FileTypeHandlers/TextViewer';
 import ImageViewer from './FileTypeHandlers/ImageViewer';
 import CsvViewer from './FileTypeHandlers/CsvViewer';
 import DocxViewer from './FileTypeHandlers/DocxViewer';
 import XlsxViewer from './FileTypeHandlers/XlsxViewer';
+import s3Service from '../services/S3Service';
+import fileProcessor from '../services/FileProcessor';
 
 function FileViewer({ file, currentPath }) {
   const [fileData, setFileData] = useState(null);
@@ -55,10 +56,19 @@ function FileViewer({ file, currentPath }) {
       setError(null);
       
       try {
-        const response = await axios.get(`/api/file?path=${file.path}&preview=true`);
-        setFileData(response.data);
+        // Get the file from S3
+        const fileResponse = await s3Service.getFile(file.path);
+        
+        // Process the file for preview
+        const preview = await fileProcessor.getFilePreview(
+          fileResponse.data, 
+          file.extension,
+          fileResponse.contentType
+        );
+        
+        setFileData(preview);
       } catch (err) {
-        setError('Failed to load file preview: ' + (err.response?.data?.error || err.message));
+        setError('Failed to load file preview: ' + err.message);
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -71,8 +81,18 @@ function FileViewer({ file, currentPath }) {
   const handleDownload = () => {
     if (!file) return;
     
-    // Create download link
-    window.open(`/api/file?path=${file.path}`, '_blank');
+    try {
+      // Get a signed URL for download
+      const downloadUrl = s3Service.getSignedUrl(file.path);
+      if (downloadUrl) {
+        window.open(downloadUrl, '_blank');
+      } else {
+        setError('Failed to generate download URL');
+      }
+    } catch (err) {
+      setError('Failed to download file: ' + err.message);
+      console.error(err);
+    }
   };
   
   // Render empty state if no file is selected
@@ -248,7 +268,7 @@ function FileViewer({ file, currentPath }) {
               <DocxViewer content={fileData.preview} />
             )}
             
-            {fileData.type === 'binary' || fileData.type === 'unsupported' && (
+            {(fileData.type === 'binary' || fileData.type === 'unsupported') && (
               <div className="text-center p-8 text-gray-600">
                 <p className="mb-4">{fileData.preview}</p>
                 <p>Please download the file to view its contents.</p>
