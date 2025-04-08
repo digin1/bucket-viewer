@@ -8,21 +8,54 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPath, setCurrentPath] = useState('');
   const [config, setConfig] = useState(null);
-  const [isConfigOpen, setIsConfigOpen] = useState(true); // Show config panel by default
+  const [isConfigOpen, setIsConfigOpen] = useState(false); // Don't show config panel by default if URL params exist
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Get URL parameters
+  const getUrlParams = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return {
+      endpoint: urlParams.get('endpoint'),
+      bucket: urlParams.get('bucket'),
+      path: urlParams.get('path') || ''
+    };
+  };
   
   // Load configuration on component mount
   useEffect(() => {
     const fetchConfig = async () => {
       try {
         setIsLoading(true);
-        const response = await axios.get('/api/config');
+        
+        // Get URL parameters
+        const { endpoint, bucket, path } = getUrlParams();
+        
+        // If we have endpoint and bucket in URL, use these
+        let url = '/api/config';
+        if (endpoint && bucket) {
+          url += `?endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
+          // Set isConfigOpen to false as we have valid parameters
+          setIsConfigOpen(false);
+        } else {
+          // If no URL params, show config panel by default
+          setIsConfigOpen(true);
+        }
+        
+        const response = await axios.get(url);
         setConfig(response.data);
+        
+        // Set initial path from URL if provided
+        if (path) {
+          setCurrentPath(path);
+        }
+        
         setError(null);
       } catch (err) {
         setError('Failed to load configuration: ' + err.message);
         console.error(err);
+        // Show config panel if there's an error
+        setIsConfigOpen(true);
       } finally {
         setIsLoading(false);
       }

@@ -14,7 +14,18 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     setError(null);
     
     try {
-      const response = await axios.get(`/api/list?prefix=${prefix}`);
+      // Get URL parameters to pass along
+      const urlParams = new URLSearchParams(window.location.search);
+      const endpoint = urlParams.get('endpoint');
+      const bucket = urlParams.get('bucket');
+      
+      // Build the URL with parameters if they exist
+      let url = `/api/list?prefix=${encodeURIComponent(prefix)}`;
+      if (endpoint && bucket) {
+        url += `&endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
+      }
+      
+      const response = await axios.get(url);
       setBucketContent(response.data);
       onPathChange(prefix);
       
@@ -52,12 +63,18 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     setBreadcrumbs(crumbs);
   };
   
-  // Load initial content on component mount
+  // Load initial content on component mount or when currentPath changes
   useEffect(() => {
-    // Only fetch once on initial load
     if (initialLoad) {
       fetchBucketContent(currentPath);
       setInitialLoad(false);
+    }
+  }, [initialLoad]);
+  
+  // React to changes in currentPath from parent component
+  useEffect(() => {
+    if (!initialLoad && currentPath) {
+      fetchBucketContent(currentPath);
     }
   }, [currentPath, initialLoad]);
   
