@@ -65,10 +65,21 @@ def handle_config():
     global config
     
     if request.method == 'GET':
+        # Check for URL parameters
+        endpoint_url = request.args.get('endpoint')
+        bucket_name = request.args.get('bucket')
+        
+        # If URL parameters are provided, update the config temporarily
+        temp_config = config.copy()
+        if endpoint_url and bucket_name:
+            temp_config['endpoint_url'] = endpoint_url
+            temp_config['bucket_name'] = bucket_name
+        
         # Remove sensitive information for frontend
-        safe_config = config.copy()
+        safe_config = temp_config.copy()
         if 'aws_secret_access_key' in safe_config:
             safe_config['aws_secret_access_key'] = '********' if safe_config['aws_secret_access_key'] else ''
+        
         return jsonify(safe_config)
     
     elif request.method == 'POST':
@@ -88,12 +99,27 @@ def handle_config():
 def list_objects():
     prefix = request.args.get('prefix', '')
     
+    # Check for URL parameters that might override the config
+    endpoint_url = request.args.get('endpoint')
+    bucket_name = request.args.get('bucket')
+    
     try:
-        s3_client = get_s3_client()
-        bucket_name = get_bucket_name()
+        # Use the standard S3 client or create a new one with URL parameters
+        if endpoint_url and bucket_name:
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=endpoint_url,
+                aws_access_key_id='', 
+                aws_secret_access_key='',
+                config=Config(signature_version=UNSIGNED)
+            )
+            current_bucket = bucket_name
+        else:
+            s3_client = get_s3_client()
+            current_bucket = get_bucket_name()
         
         response = s3_client.list_objects_v2(
-            Bucket=bucket_name,
+            Bucket=current_bucket,
             Prefix=prefix,
             Delimiter='/'
         )
@@ -144,12 +170,27 @@ def get_file():
     file_path = request.args.get('path', '')
     preview = request.args.get('preview', 'false').lower() == 'true'
     
+    # Check for URL parameters that might override the config
+    endpoint_url = request.args.get('endpoint')
+    bucket_name = request.args.get('bucket')
+    
     if not file_path:
         return jsonify({'error': 'File path is required'}), 400
     
     try:
-        s3_client = get_s3_client()
-        bucket_name = get_bucket_name()
+        # Use the standard S3 client or create a new one with URL parameters
+        if endpoint_url and bucket_name:
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=endpoint_url,
+                aws_access_key_id='', 
+                aws_secret_access_key='',
+                config=Config(signature_version=UNSIGNED)
+            )
+            current_bucket = bucket_name
+        else:
+            s3_client = get_s3_client()
+            current_bucket = get_bucket_name()
         
         if preview:
             # Get file extension
@@ -160,7 +201,7 @@ def get_file():
                 temp_path = temp.name
             
             # Download the file to temp location
-            s3_client.download_file(bucket_name, file_path, temp_path)
+            s3_client.download_file(current_bucket, file_path, temp_path)
             
             # Get preview data based on file type
             preview_data = get_file_preview(temp_path, file_ext)
@@ -174,13 +215,66 @@ def get_file():
             with tempfile.NamedTemporaryFile(delete=False) as temp:
                 temp_path = temp.name
             
-            s3_client.download_file(bucket_name, file_path, temp_path)
+            s3_client.download_file(current_bucket, file_path, temp_path)
             
             return send_file(
                 temp_path,
                 as_attachment=True,
                 download_name=os.path.basename(file_path)
             )
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/fileinfo', methods=['GET'])
+def get_file_info():
+    file_path = request.args.get('path', '')
+    
+    # Check for URL parameters that might override the config
+    endpoint_url = request.args.get('endpoint')
+    bucket_name = request.args.get('bucket')
+    
+    if not file_path:
+        return jsonify({'error': 'File path is required'}), 400
+    
+    try:
+        # Use the standard S3 client or create a new one with URL parameters
+        if endpoint_url and bucket_name:
+            s3_client = boto3.client(
+                's3',
+                endpoint_url=endpoint_url,
+                aws_access_key_id='', 
+                aws_secret_access_key='',
+                config=Config(signature_version=UNSIGNED)
+            )
+            current_bucket = bucket_name
+        else:
+            s3_client = get_s3_client()
+            current_bucket = get_bucket_name()
+        
+        # Get object metadata
+        response = s3_client.head_object(
+            Bucket=current_bucket,
+            Key=file_path
+        )
+        
+        # Extract file name and extension
+        file_name = file_path.split('/')[-1]
+        file_ext = os.path.splitext(file_name)[1].lower()[1:]
+        
+        # Construct file info object
+        file_info = {
+            'name': file_name,
+            'path': file_path,
+            'size': response.get('ContentLength', 0),
+            'lastModified': response.get('LastModified', '').isoformat() if hasattr(response.get('LastModified', ''), 'isoformat') else '',
+            'type': 'file',
+            'extension': file_ext,
+            'supported': is_supported_type(file_ext),
+            'metadata': {k: v for k, v in response.items() if k not in ['ResponseMetadata']}
+        }
+        
+        return jsonify(file_info)
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500

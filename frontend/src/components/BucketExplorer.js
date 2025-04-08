@@ -6,6 +6,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
+  const [initialLoad, setInitialLoad] = useState(true);
   
   // Fetch data from the API
   const fetchBucketContent = async (prefix = '') => {
@@ -53,8 +54,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   
   // Load initial content on component mount
   useEffect(() => {
-    fetchBucketContent(currentPath);
-  }, []);
+    // Only fetch once on initial load
+    if (initialLoad) {
+      fetchBucketContent(currentPath);
+      setInitialLoad(false);
+    }
+  }, [currentPath, initialLoad]);
   
   // Handle folder click
   const handleFolderClick = (folderPath) => {
