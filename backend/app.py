@@ -11,10 +11,10 @@ from botocore.config import Config
 app = Flask(__name__)
 CORS(app)
 
-# Default configuration
+# Default configuration - removed sensitive information
 DEFAULT_CONFIG = {
-    'endpoint_url': 'https://s3.eidf.ac.uk',
-    'bucket_name': 'eidf190-sv2a-diversity-project'
+    'endpoint_url': '',
+    'bucket_name': ''
 }
 
 # Configuration path
