@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    volumes:
+      - ./backend:/app
+    environment:
+      - FLASK_ENV=development
+    ports:
+      - "5000:5000"
+    networks:
+      - bucket-viewer-network  
+  
+  frontend:
+    build:
+      context: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend  
+    networks:
+      - bucket-viewer-network  
+
+volumes:
+  node_modules:
+
+networks:
+  bucket-viewer-network:
+    driver: bridge  
