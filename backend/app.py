@@ -5,6 +5,8 @@ import os
 import tempfile
 import json
 from utils.file_handlers import get_file_preview, is_supported_type
+from botocore import UNSIGNED
+from botocore.config import Config
 
 app = Flask(__name__)
 CORS(app)
@@ -49,7 +51,9 @@ def get_s3_client():
     return boto3.client(
         's3',
         endpoint_url=config.get('endpoint_url'),
-        config=boto3.session.Config(signature_version=None)
+        aws_access_key_id='', 
+        aws_secret_access_key='',
+        config=Config(signature_version=UNSIGNED)
     )
 
 # Get current bucket name from config
@@ -170,7 +174,7 @@ def get_file():
             with tempfile.NamedTemporaryFile(delete=False) as temp:
                 temp_path = temp.name
             
-            s3_client.download_file(BUCKET_NAME, file_path, temp_path)
+            s3_client.download_file(bucket_name, file_path, temp_path)
             
             return send_file(
                 temp_path,

@@ -1,22 +1,20 @@
-FROM node:14-alpine as build
+FROM node:16-alpine as build
 
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies with specific config to avoid peer dependency issues
 RUN npm install --legacy-peer-deps
 
-# Ensure the public directory exists
-RUN mkdir -p public
-
-# Copy all frontend files
+# Copy the rest of the code
 COPY . .
 
-# Ensure the public directory has required files
-RUN touch public/favicon.ico
+# Build the app
 RUN npm run build
 
-# Production stage
+# Production stage with nginx
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf

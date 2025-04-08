@@ -9,7 +9,7 @@ services:
     environment:
       - FLASK_ENV=development
     ports:
-      - "5000:5000"
+      - "5050:5000"  # Changed from 5000:5000
     networks:
       - bucket-viewer-network  
   
@@ -20,7 +20,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "3000:80"
+      - "8080:80"  # Changed from 3000:80
     depends_on:
       - backend  
     networks:
@@ -31,4 +31,4 @@ volumes:
 
 networks:
   bucket-viewer-network:
-    driver: bridge  
+    driver: bridge
