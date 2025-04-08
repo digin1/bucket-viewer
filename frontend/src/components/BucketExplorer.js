@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import s3Service from '../services/S3Service';
 
 function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized }) {
@@ -8,8 +8,51 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [initialLoad, setInitialLoad] = useState(true);
   
-  // Fetch data from S3
-  const fetchBucketContent = async (prefix = '') => {
+  // Update breadcrumbs based on current path
+  const updateBreadcrumbs = useCallback((path) => {
+    const parts = path.split('/').filter(Boolean);
+    
+    const crumbs = [{ name: 'Home', path: '' }];
+    let currentPathFragment = '';
+    
+    parts.forEach(part => {
+      currentPathFragment += part + '/';
+      crumbs.push({
+        name: part,
+        path: currentPathFragment
+      });
+    });
+    
+    setBreadcrumbs(crumbs);
+  }, []);
+  
+  // Update the browser URL to include the current path
+  const updateBrowserUrl = useCallback((path) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const endpoint = urlParams.get('endpoint');
+    const bucket = urlParams.get('bucket');
+    
+    if (endpoint && bucket) {
+      // Create new URL params
+      const newParams = new URLSearchParams();
+      newParams.set('endpoint', endpoint);
+      newParams.set('bucket', bucket);
+      
+      // Only add path if it's not empty
+      if (path) {
+        newParams.set('path', path);
+      } else {
+        newParams.delete('path');
+      }
+      
+      // Update browser URL without reloading the page
+      const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+      window.history.pushState({ path: path }, '', newUrl);
+    }
+  }, []);
+  
+  // Fetch data from S3 - wrapped in useCallback
+  const fetchBucketContent = useCallback(async (prefix = '') => {
     setIsLoading(true);
     setError(null);
     
@@ -42,32 +85,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     } finally {
       setIsLoading(false);
     }
-  };
-  
-  // Update the browser URL to include the current path
-  const updateBrowserUrl = (path) => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const endpoint = urlParams.get('endpoint');
-    const bucket = urlParams.get('bucket');
-    
-    if (endpoint && bucket) {
-      // Create new URL params
-      const newParams = new URLSearchParams();
-      newParams.set('endpoint', endpoint);
-      newParams.set('bucket', bucket);
-      
-      // Only add path if it's not empty
-      if (path) {
-        newParams.set('path', path);
-      } else {
-        newParams.delete('path');
-      }
-      
-      // Update browser URL without reloading the page
-      const newUrl = `${window.location.pathname}?${newParams.toString()}`;
-      window.history.pushState({ path: path }, '', newUrl);
-    }
-  };
+  }, [onPathChange, updateBreadcrumbs, updateBrowserUrl]);
   
   // Handle browser back/forward buttons
   useEffect(() => {
@@ -89,26 +107,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, fetchBucketContent]);
-  
-  // Update breadcrumbs based on current path
-  const updateBreadcrumbs = (path) => {
-    const parts = path.split('/').filter(Boolean);
-    
-    const crumbs = [{ name: 'Home', path: '' }];
-    let currentPath = '';
-    
-    parts.forEach(part => {
-      currentPath += part + '/';
-      crumbs.push({
-        name: part,
-        path: currentPath
-      });
-    });
-    
-    setBreadcrumbs(crumbs);
-  };
   
   // Load initial content when S3 is initialized
   useEffect(() => {
@@ -121,7 +120,6 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
       fetchBucketContent(pathFromUrl || currentPath);
       setInitialLoad(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s3Initialized, initialLoad, currentPath, fetchBucketContent]);
   
   // React to changes in currentPath from parent component
@@ -129,7 +127,6 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized
     if (!initialLoad && s3Initialized && currentPath !== undefined) {
       fetchBucketContent(currentPath);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, initialLoad, s3Initialized, fetchBucketContent]);
   
   // Handle folder click
