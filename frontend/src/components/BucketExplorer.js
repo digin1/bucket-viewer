@@ -31,6 +31,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       
       // Update breadcrumbs
       updateBreadcrumbs(prefix);
+      
+      // Update the browser URL to include the path
+      updateBrowserUrl(prefix);
     } catch (err) {
       if (err.response?.status === 403) {
         setError('Access denied. Please check your credentials in Settings.');
@@ -44,6 +47,53 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       setIsLoading(false);
     }
   };
+  
+  // Update the browser URL to include the current path
+  const updateBrowserUrl = (path) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const endpoint = urlParams.get('endpoint');
+    const bucket = urlParams.get('bucket');
+    
+    if (endpoint && bucket) {
+      // Create new URL params
+      const newParams = new URLSearchParams();
+      newParams.set('endpoint', endpoint);
+      newParams.set('bucket', bucket);
+      
+      // Only add path if it's not empty
+      if (path) {
+        newParams.set('path', path);
+      } else {
+        newParams.delete('path');
+      }
+      
+      // Update browser URL without reloading the page
+      const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+      window.history.pushState({ path: path }, '', newUrl);
+    }
+  };
+  
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event) => {
+      // Get the path from the URL when back/forward buttons are clicked
+      const urlParams = new URLSearchParams(window.location.search);
+      const pathFromUrl = urlParams.get('path') || '';
+      
+      // Only fetch content if the path has changed
+      if (pathFromUrl !== currentPath) {
+        fetchBucketContent(pathFromUrl);
+      }
+    };
+    
+    // Add event listener for popstate (back/forward button clicks)
+    window.addEventListener('popstate', handlePopState);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [currentPath]);
   
   // Update breadcrumbs based on current path
   const updateBreadcrumbs = (path) => {
@@ -66,10 +116,15 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   // Load initial content on component mount or when currentPath changes
   useEffect(() => {
     if (initialLoad) {
-      fetchBucketContent(currentPath);
+      // First check if there's a path in the URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const pathFromUrl = urlParams.get('path');
+      
+      // If there's a path in the URL, use it instead of the currentPath prop
+      fetchBucketContent(pathFromUrl || currentPath);
       setInitialLoad(false);
     }
-  }, [initialLoad]);
+  }, [initialLoad, currentPath]);
   
   // React to changes in currentPath from parent component
   useEffect(() => {

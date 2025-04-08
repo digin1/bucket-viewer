@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import BucketExplorer from './components/BucketExplorer';
 import FileViewer from './components/FileViewer';
 import ConfigPanel from './components/ConfigPanel';
+import SyncCommandBox from './components/SyncCommandBox';
 import axios from 'axios';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPath, setCurrentPath] = useState('');
   const [config, setConfig] = useState(null);
-  const [isConfigOpen, setIsConfigOpen] = useState(false); // Don't show config panel by default if URL params exist
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -62,6 +63,23 @@ function App() {
     };
 
     fetchConfig();
+    
+    // Add event listener for URL changes (popstate)
+    const handlePopState = () => {
+      const { path } = getUrlParams();
+      if (path !== currentPath) {
+        setCurrentPath(path);
+        // Reset selected file when path changes
+        setSelectedFile(null);
+      }
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   // Save configuration
@@ -74,6 +92,15 @@ function App() {
       // Reset selected file and path for new bucket
       setSelectedFile(null);
       setCurrentPath('');
+      
+      // Update URL to reflect new config
+      const newParams = new URLSearchParams();
+      if (newConfig.endpoint_url) newParams.set('endpoint', newConfig.endpoint_url);
+      if (newConfig.bucket_name) newParams.set('bucket', newConfig.bucket_name);
+      
+      const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+      window.history.pushState({ path: '' }, '', newUrl);
+      
       setError(null);
     } catch (err) {
       setError('Failed to save configuration: ' + err.message);
@@ -81,6 +108,13 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle path changes
+  const handlePathChange = (newPath) => {
+    setCurrentPath(newPath);
+    // Reset selected file whenever the path changes
+    setSelectedFile(null);
   };
 
   return (
@@ -95,12 +129,21 @@ function App() {
               </p>
             )}
           </div>
-          <button
-            className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onClick={() => setIsConfigOpen(true)}
-          >
-            Settings
-          </button>
+          <div className="flex space-x-2">
+            {config && config.bucket_name && (
+              <SyncCommandBox 
+                bucket={config.bucket_name}
+                endpoint={config.endpoint_url}
+                currentPath={currentPath}
+              />
+            )}
+            <button
+              className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={() => setIsConfigOpen(true)}
+            >
+              Settings
+            </button>
+          </div>
         </div>
       </header>
 
@@ -135,7 +178,7 @@ function App() {
             <BucketExplorer
               onSelectFile={setSelectedFile}
               currentPath={currentPath}
-              onPathChange={setCurrentPath}
+              onPathChange={handlePathChange}
             />
           </div>
 

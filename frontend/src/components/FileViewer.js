@@ -10,6 +10,42 @@ function FileViewer({ file, currentPath }) {
   const [fileData, setFileData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showSyncCommand, setShowSyncCommand] = useState(false);
+  const [copiedToast, setCopiedToast] = useState(false);
+  
+  // Get URL parameters for the sync command
+  const getUrlParams = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return {
+      endpoint: urlParams.get('endpoint'),
+      bucket: urlParams.get('bucket') || ''
+    };
+  };
+  
+  // Generate the AWS S3 sync command
+  const getSyncCommand = () => {
+    const { endpoint, bucket } = getUrlParams();
+    // Don't proceed if bucket is empty or null
+    if (!bucket) {
+      return 'Please configure bucket in settings first';
+    }
+    const destPath = `./${bucket.split('-').join('_')}`;
+    return `aws s3 sync s3://${bucket}${currentPath ? '/' + currentPath : ''} ${destPath} --no-sign-request ${endpoint ? '--endpoint-url ' + endpoint : ''}`;
+  };
+  
+  // Copy sync command to clipboard
+  const copyCommandToClipboard = () => {
+    navigator.clipboard.writeText(getSyncCommand())
+      .then(() => {
+        setCopiedToast(true);
+        setTimeout(() => {
+          setCopiedToast(false);
+        }, 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+  };
   
   useEffect(() => {
     if (!file) return;
@@ -41,11 +77,64 @@ function FileViewer({ file, currentPath }) {
   
   // Render empty state if no file is selected
   if (!file) {
+    const { bucket } = getUrlParams();
+    
     return (
-      <div className="h-full flex items-center justify-center bg-white p-8">
-        <div className="text-center text-gray-500">
-          <div className="text-5xl mb-4">📄</div>
-          <p>Select a file to preview</p>
+      <div className="h-full flex flex-col bg-white">
+        {/* Current directory info header */}
+        {currentPath && (
+          <div className="bg-gray-100 p-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-medium">
+                  Current Directory: {currentPath || 'Root'}
+                </h2>
+              </div>
+              {bucket && (
+                <div className="relative">
+                  <button
+                    className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                    onClick={() => setShowSyncCommand(!showSyncCommand)}
+                  >
+                    Download All Files
+                  </button>
+                  
+                  {showSyncCommand && (
+                    <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
+                      <div className="p-3">
+                        <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
+                        <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
+                        <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
+                          {getSyncCommand()}
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 focus:outline-none"
+                            onClick={copyCommandToClipboard}
+                          >
+                            Copy Command
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {copiedToast && (
+                    <div className="absolute top-full mt-2 right-0 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm whitespace-nowrap z-50">
+                      Command copied to clipboard!
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        <div className="flex-1 flex items-center justify-center bg-white p-8">
+          <div className="text-center text-gray-500">
+            <div className="text-5xl mb-4">📄</div>
+            <p>Select a file to preview</p>
+          </div>
         </div>
       </div>
     );
@@ -88,12 +177,50 @@ function FileViewer({ file, currentPath }) {
               {file.lastModified ? ` • Last modified: ${new Date(file.lastModified).toLocaleString()}` : ''}
             </p>
           </div>
-          <button 
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onClick={handleDownload}
-          >
-            Download
-          </button>
+          <div className="flex space-x-2">
+            {currentPath && (
+              <div className="relative">
+                <button
+                  className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  onClick={() => setShowSyncCommand(!showSyncCommand)}
+                >
+                  Download Directory
+                </button>
+                
+                {showSyncCommand && (
+                  <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
+                    <div className="p-3">
+                      <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
+                      <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
+                      <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
+                        {getSyncCommand()}
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 focus:outline-none"
+                          onClick={copyCommandToClipboard}
+                        >
+                          Copy Command
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {copiedToast && (
+                  <div className="absolute top-full mt-2 right-0 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm whitespace-nowrap z-50">
+                    Command copied to clipboard!
+                  </div>
+                )}
+              </div>
+            )}
+            <button 
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onClick={handleDownload}
+            >
+              Download
+            </button>
+          </div>
         </div>
       </div>
       
