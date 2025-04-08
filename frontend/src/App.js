@@ -12,6 +12,7 @@ function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [s3Initialized, setS3Initialized] = useState(false);
 
   // Get URL parameters
   const getUrlParams = () => {
@@ -21,6 +22,26 @@ function App() {
       bucket: urlParams.get('bucket'),
       path: urlParams.get('path') || ''
     };
+  };
+
+  // Initialize S3 service with config
+  const initializeS3Service = (configData) => {
+    if (!configData || !configData.endpoint_url || !configData.bucket_name) {
+      return false;
+    }
+    
+    try {
+      // Initialize S3 service with the config
+      s3Service.initialize({
+        endpoint: configData.endpoint_url,
+        bucket: configData.bucket_name
+      });
+      
+      return true;
+    } catch (err) {
+      console.error('Error initializing S3 service:', err);
+      return false;
+    }
   };
 
   // Load configuration on component mount
@@ -40,7 +61,8 @@ function App() {
           };
           
           // Initialize S3 service with the config
-          s3Service.initialize(newConfig);
+          const initialized = initializeS3Service(newConfig);
+          setS3Initialized(initialized);
           
           setConfig(newConfig);
           setIsConfigOpen(false);
@@ -56,13 +78,15 @@ function App() {
             const parsedConfig = JSON.parse(savedConfig);
             
             // Initialize S3 service with the saved config
-            s3Service.initialize(parsedConfig);
+            const initialized = initializeS3Service(parsedConfig);
+            setS3Initialized(initialized);
             
             setConfig(parsedConfig);
-            setIsConfigOpen(false);
+            setIsConfigOpen(!initialized); // Open config panel if initialization failed
           } else {
             // Show config panel by default if no config is found
             setIsConfigOpen(true);
+            setS3Initialized(false);
           }
         }
 
@@ -72,6 +96,7 @@ function App() {
         console.error(err);
         // Show config panel if there's an error
         setIsConfigOpen(true);
+        setS3Initialized(false);
       } finally {
         setIsLoading(false);
       }
@@ -103,7 +128,14 @@ function App() {
       setIsLoading(true);
       
       // Initialize S3 service with the new config
-      s3Service.initialize(newConfig);
+      const initialized = initializeS3Service(newConfig);
+      setS3Initialized(initialized);
+      
+      if (!initialized) {
+        setError('Failed to initialize S3 service with the provided configuration.');
+        setIsLoading(false);
+        return;
+      }
       
       // Save to localStorage
       localStorage.setItem('s3ViewerConfig', JSON.stringify(newConfig));
@@ -127,6 +159,7 @@ function App() {
     } catch (err) {
       setError('Failed to save configuration: ' + err.message);
       console.error(err);
+      setS3Initialized(false);
     } finally {
       setIsLoading(false);
     }
@@ -193,7 +226,7 @@ function App() {
       )}
 
       {/* Main content when config is loaded */}
-      {!isLoading && !error && config && !isConfigOpen && (
+      {!isLoading && !error && config && !isConfigOpen && s3Initialized && (
         <div className="flex flex-1 overflow-hidden">
           {/* Left sidebar - Bucket Explorer */}
           <div className="w-1/3 border-r border-gray-200 bg-white overflow-auto">
@@ -201,6 +234,7 @@ function App() {
               onSelectFile={setSelectedFile}
               currentPath={currentPath}
               onPathChange={handlePathChange}
+              s3Initialized={s3Initialized}
             />
           </div>
 
@@ -221,7 +255,7 @@ function App() {
           onSave={saveConfig}
           onCancel={() => {
             // Only allow closing the config panel if we already have a valid config
-            if (config && config.bucket_name) {
+            if (config && config.bucket_name && s3Initialized) {
               setIsConfigOpen(false);
             }
           }}

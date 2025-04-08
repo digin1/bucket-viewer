@@ -15,30 +15,48 @@ class S3Service {
    * @param {Object} config - Configuration object
    * @param {string} config.endpoint - S3 endpoint URL
    * @param {string} config.bucket - S3 bucket name
+   * @returns {Object} - Current configuration
    */
   initialize(config) {
+    // Validate required parameters
+    if (!config.endpoint || !config.bucket) {
+      console.error('S3Service initialization error: Missing required parameters');
+      this.s3Client = null;
+      return null;
+    }
+
     this.config = {
       endpoint: config.endpoint || '',
       bucket: config.bucket || ''
     };
 
-    // Configure AWS SDK
-    const endpoint = new AWS.Endpoint(this.config.endpoint);
-    
-    // Create S3 client with anonymous credentials (public bucket access)
-    this.s3Client = new AWS.S3({
-      endpoint: endpoint,
-      credentials: new AWS.Credentials('', ''), // Anonymous access
-      s3ForcePathStyle: true,
-      signatureVersion: 'v4',
-      region: 'us-east-1' // Default region, may need to be configurable
-    });
-    
-    return this.config;
+    try {
+      // Configure AWS SDK
+      const endpoint = new AWS.Endpoint(this.config.endpoint);
+      
+      // Create S3 client with anonymous credentials (public bucket access)
+      this.s3Client = new AWS.S3({
+        endpoint: endpoint,
+        credentials: new AWS.Credentials('', ''), // Anonymous access
+        s3ForcePathStyle: true,
+        signatureVersion: 'v4',
+        region: 'us-east-1' // Default region, may need to be configurable
+      });
+      
+      return this.config;
+    } catch (error) {
+      console.error('S3Service initialization error:', error);
+      this.s3Client = null;
+      return null;
+    }
   }
 
+  /**
+   * Check if S3 service is initialized with valid configuration
+   * @returns {boolean} - Whether service is initialized
+   */
   isInitialized() {
-    return this.s3Client !== null && this.config.bucket !== '';
+    return this.s3Client !== null && this.config.endpoint && this.config.bucket;
   }
 
   /**
@@ -47,7 +65,7 @@ class S3Service {
    * @returns {Promise<Object>} - Promise resolving to bucket contents
    */
   async listObjects(prefix = '') {
-    if (!this.s3Client || !this.config.bucket) {
+    if (!this.isInitialized()) {
       throw new Error('S3 client not initialized or bucket not set');
     }
 
@@ -62,7 +80,7 @@ class S3Service {
       
       // Format response to match the API response from Flask backend
       const folders = (response.CommonPrefixes || []).map(item => ({
-        name: item.Prefix.rstrip('/').split('/').pop() + '/',
+        name: item.Prefix.split('/').pop() || item.Prefix,
         path: item.Prefix,
         type: 'folder'
       }));
@@ -102,7 +120,7 @@ class S3Service {
    * @returns {Promise<Object>} - Promise resolving to file content
    */
   async getFile(path) {
-    if (!this.s3Client || !this.config.bucket) {
+    if (!this.isInitialized()) {
       throw new Error('S3 client not initialized or bucket not set');
     }
 
@@ -133,7 +151,7 @@ class S3Service {
    * @returns {Promise<Object>} - Promise resolving to file metadata
    */
   async getFileInfo(path) {
-    if (!this.s3Client || !this.config.bucket) {
+    if (!this.isInitialized()) {
       throw new Error('S3 client not initialized or bucket not set');
     }
 
@@ -175,7 +193,7 @@ class S3Service {
     const supportedTypes = {
       text: ['txt', 'md', 'json', 'csv', 'xml', 'html', 'css', 'js', 'py', 'r'],
       image: ['jpg', 'jpeg', 'png', 'gif', 'svg'],
-      document: ['pdf']
+      document: ['docx', 'xlsx', 'pdf']
     };
 
     for (const category in supportedTypes) {
@@ -192,7 +210,7 @@ class S3Service {
    * @returns {string} - URL for file download
    */
   getSignedUrl(path) {
-    if (!this.s3Client || !this.config.bucket) {
+    if (!this.isInitialized()) {
       throw new Error('S3 client not initialized or bucket not set');
     }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import s3Service from '../services/S3Service';
 
-function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
+function BucketExplorer({ onSelectFile, currentPath, onPathChange, s3Initialized }) {
   const [bucketContent, setBucketContent] = useState({ folders: [], files: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -109,9 +109,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     setBreadcrumbs(crumbs);
   };
   
-  // Load initial content on component mount or when currentPath changes
+  // Load initial content when S3 is initialized
   useEffect(() => {
-    if (initialLoad) {
+    if (s3Initialized && initialLoad) {
       // First check if there's a path in the URL
       const urlParams = new URLSearchParams(window.location.search);
       const pathFromUrl = urlParams.get('path');
@@ -120,14 +120,14 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       fetchBucketContent(pathFromUrl || currentPath);
       setInitialLoad(false);
     }
-  }, [initialLoad, currentPath]);
+  }, [s3Initialized, initialLoad, currentPath]);
   
   // React to changes in currentPath from parent component
   useEffect(() => {
-    if (!initialLoad && currentPath) {
+    if (!initialLoad && s3Initialized && currentPath !== undefined) {
       fetchBucketContent(currentPath);
     }
-  }, [currentPath, initialLoad]);
+  }, [currentPath, initialLoad, s3Initialized]);
   
   // Handle folder click
   const handleFolderClick = (folderPath) => {
@@ -181,6 +181,23 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     return iconMap[extension] || '📄';
   };
   
+  // Show specific message when S3 is not initialized
+  if (!s3Initialized) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-amber-600 p-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="font-medium">S3 service not initialized</p>
+            <p className="mt-2 text-sm">Please configure your bucket settings first.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="h-full flex flex-col">
       {/* Breadcrumbs */}
@@ -208,7 +225,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       {/* Error state */}
       {error && (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-red-500 p-4">{error}</div>
+          <div className="text-red-500 p-4 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p>{error}</p>
+          </div>
         </div>
       )}
       
