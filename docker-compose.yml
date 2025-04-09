@@ -9,9 +9,17 @@ services:
     environment:
       - FLASK_ENV=development
     ports:
-      - "5050:5000"  # Changed from 5000:5000
+      - "5050:5000"
     networks:
-      - bucket-viewer-network  
+      - bucket-viewer-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.7'
+          memory: 500M
+        reservations:
+          cpus: '0.3'
+          memory: 300M
   
   frontend:
     build:
@@ -20,11 +28,19 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "8080:80"  # Changed from 3000:80
+      - "8080:80"
     depends_on:
       - backend  
     networks:
-      - bucket-viewer-network  
+      - bucket-viewer-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 800M
+        reservations:
+          cpus: '0.3'
+          memory: 400M
 
 volumes:
   node_modules:
