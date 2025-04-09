@@ -43,15 +43,15 @@ function ShareableLink() {
         })
         .catch(err => {
           console.error('Failed to copy with Clipboard API: ', err);
-          useFallbackCopyMethod(urlToCopy);
+          fallbackCopyMethod(urlToCopy);
         });
     } else {
       // Fallback for browsers without Clipboard API support
-      useFallbackCopyMethod(urlToCopy);
+      fallbackCopyMethod(urlToCopy);
     }
   };
   
-  const useFallbackCopyMethod = (text) => {
+  const fallbackCopyMethod = (text) => {
     try {
       // Create temporary textarea element
       const textArea = document.createElement('textarea');
