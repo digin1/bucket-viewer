@@ -31,9 +31,23 @@ function ShareableLink() {
     };
   }, []);
   
+  // Function to create a clean, simplified URL for copying that exactly matches what's displayed
+  const getCleanUrl = () => {
+    try {
+      const baseUrl = getDisplayUrl();
+      const displayParams = getDisplayParams();
+      
+      // Combine them to exactly match what's shown in the UI
+      return baseUrl + displayParams;
+    } catch (e) {
+      // Fallback to current URL if there's an error
+      return window.location.href;
+    }
+  };
+  
   const copyLinkToClipboard = () => {
-    // Ensure we're copying the most up-to-date URL
-    const urlToCopy = window.location.href;
+    // Get the clean, simplified URL
+    const urlToCopy = getCleanUrl();
     
     // First try the modern Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -102,7 +116,7 @@ function ShareableLink() {
     // Create visible textarea with URL for manual copy
     const textArea = textAreaRef.current;
     if (textArea) {
-      textArea.value = window.location.href;
+      textArea.value = getCleanUrl();
       textArea.style.display = 'block';
       textArea.focus();
       textArea.select();
