@@ -6,11 +6,17 @@ function ShareableLink() {
   
   // Update the URL when it changes
   useEffect(() => {
-    setCurrentUrl(window.location.href);
+    const updateUrl = () => {
+      // Get the actual current URL
+      const fullUrl = window.location.href;
+      setCurrentUrl(fullUrl);
+    };
+    
+    updateUrl();
     
     // Listen for changes to the URL (like when navigating folders)
     const handleUrlChange = () => {
-      setCurrentUrl(window.location.href);
+      updateUrl();
     };
     
     // Add event listeners for URL changes
@@ -38,16 +44,65 @@ function ShareableLink() {
       });
   };
   
+  // Function to get domain and path for display
+  const getDisplayUrl = () => {
+    try {
+      const url = new URL(currentUrl);
+      // Show the domain and pathname without the query string
+      return `${url.origin}${url.pathname}`;
+    } catch (e) {
+      return currentUrl;
+    }
+  };
+  
+  // Function to get a simplified version of the query parameters
+  const getDisplayParams = () => {
+    try {
+      const url = new URL(currentUrl);
+      const params = new URLSearchParams(url.search);
+      
+      const endpoint = params.get('endpoint');
+      const bucket = params.get('bucket');
+      const path = params.get('path');
+      
+      let displayParams = '';
+      
+      if (bucket) {
+        displayParams += `bucket=${bucket}`;
+      }
+      
+      if (path) {
+        displayParams += displayParams ? `&path=${path}` : `path=${path}`;
+      }
+      
+      if (endpoint) {
+        // Simplify the endpoint URL to just show the domain
+        try {
+          const endpointUrl = new URL(endpoint);
+          const simplifiedEndpoint = endpointUrl.hostname;
+          displayParams += displayParams ? `&endpoint=${simplifiedEndpoint}` : `endpoint=${simplifiedEndpoint}`;
+        } catch (e) {
+          displayParams += displayParams ? `&endpoint=${endpoint}` : `endpoint=${endpoint}`;
+        }
+      }
+      
+      return displayParams ? `?${displayParams}` : '';
+    } catch (e) {
+      return '';
+    }
+  };
+  
   return (
     <div className="relative flex items-center">
-      <div className="flex-1 bg-blue-700 rounded px-3 py-1 mr-2 overflow-hidden">
-        <p className="text-white text-sm truncate" title={currentUrl}>
-          {currentUrl}
-        </p>
+      <div className="flex-1 bg-blue-700 rounded-l px-3 py-1 overflow-hidden flex items-center">
+        <div className="flex-1 text-white text-sm truncate font-mono" title={currentUrl}>
+          {getDisplayUrl()}<span className="text-blue-300">{getDisplayParams()}</span>
+        </div>
       </div>
       <button
-        className="px-3 py-1 bg-blue-800 text-white rounded hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm flex items-center"
+        className="px-3 py-1 bg-blue-800 text-white rounded-r hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm flex items-center border-l border-blue-600"
         onClick={copyLinkToClipboard}
+        title="Copy full URL to clipboard"
       >
         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
