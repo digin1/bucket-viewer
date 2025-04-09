@@ -11,6 +11,14 @@ from botocore.config import Config
 app = Flask(__name__)
 CORS(app)
 
+# Helper function to ensure endpoint has protocol
+def ensure_endpoint_has_protocol(endpoint_url):
+    """Ensure the endpoint URL has a protocol (http:// or https://)"""
+    if endpoint_url and not endpoint_url.startswith(('http://', 'https://')):
+        # Default to https:// for security
+        return f'https://{endpoint_url}'
+    return endpoint_url
+
 # Default configuration stored in memory
 config = {
     'endpoint_url': '',
@@ -19,9 +27,10 @@ config = {
 
 # Function to create S3 client using the in-memory config
 def get_s3_client():
+    endpoint = ensure_endpoint_has_protocol(config.get('endpoint_url'))
     return boto3.client(
         's3',
-        endpoint_url=config.get('endpoint_url'),
+        endpoint_url=endpoint,
         aws_access_key_id='', 
         aws_secret_access_key='',
         config=Config(signature_version=UNSIGNED)
@@ -50,7 +59,7 @@ def handle_config():
         
         # Update config temporarily if parameters are provided
         temp_config = {
-            'endpoint_url': endpoint_url,
+            'endpoint_url': ensure_endpoint_has_protocol(endpoint_url),
             'bucket_name': bucket_name
         }
         
@@ -67,6 +76,10 @@ def handle_config():
         # Preserve secret if masked
         if new_config.get('aws_secret_access_key') == '********' and config.get('aws_secret_access_key'):
             new_config['aws_secret_access_key'] = config.get('aws_secret_access_key')
+        
+        # Ensure endpoint has protocol
+        if new_config.get('endpoint_url'):
+            new_config['endpoint_url'] = ensure_endpoint_has_protocol(new_config['endpoint_url'])
         
         # Update the in-memory config (no file persistence)
         config.update(new_config)
@@ -92,6 +105,9 @@ def list_objects():
     
     try:
         if endpoint_url and bucket_name:
+            # Apply the protocol fix here
+            endpoint_url = ensure_endpoint_has_protocol(endpoint_url)
+            
             s3_client = boto3.client(
                 's3',
                 endpoint_url=endpoint_url,
@@ -170,6 +186,9 @@ def get_file():
     
     try:
         if endpoint_url and bucket_name:
+            # Apply the protocol fix here
+            endpoint_url = ensure_endpoint_has_protocol(endpoint_url)
+            
             s3_client = boto3.client(
                 's3',
                 endpoint_url=endpoint_url,
@@ -228,6 +247,9 @@ def get_file_info():
     
     try:
         if endpoint_url and bucket_name:
+            # Apply the protocol fix here
+            endpoint_url = ensure_endpoint_has_protocol(endpoint_url)
+            
             s3_client = boto3.client(
                 's3',
                 endpoint_url=endpoint_url,

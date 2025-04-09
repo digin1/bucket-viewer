@@ -6,6 +6,15 @@ import SyncCommandBox from './components/SyncCommandBox';
 import ShareableLink from './components/ShareableLink';
 import axios from 'axios';
 
+// Helper function to ensure endpoint has protocol
+const ensureEndpointHasProtocol = (endpoint) => {
+  if (endpoint && !endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+    // Default to https:// for security
+    return `https://${endpoint}`;
+  }
+  return endpoint;
+};
+
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPath, setCurrentPath] = useState('');
@@ -18,7 +27,7 @@ function App() {
   const getUrlParams = () => {
     const urlParams = new URLSearchParams(window.location.search);
     return {
-      endpoint: urlParams.get('endpoint'),
+      endpoint: ensureEndpointHasProtocol(urlParams.get('endpoint')),
       bucket: urlParams.get('bucket'),
       path: urlParams.get('path') || ''
     };
@@ -105,6 +114,12 @@ function App() {
   const saveConfig = async (newConfig) => {
     try {
       setIsLoading(true);
+      
+      // Ensure endpoint has protocol before saving
+      if (newConfig.endpoint_url) {
+        newConfig.endpoint_url = ensureEndpointHasProtocol(newConfig.endpoint_url);
+      }
+      
       await axios.post('/api/config', newConfig);
       setConfig(newConfig);
       setIsConfigOpen(false);
