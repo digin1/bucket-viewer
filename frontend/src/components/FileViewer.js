@@ -139,7 +139,7 @@ function FileViewer({ file, currentPath }) {
               {bucket && (
                 <div className="relative">
                   <button
-                    className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                     onClick={() => setShowSyncCommand(!showSyncCommand)}
                   >
                     Download All Files
@@ -228,7 +228,7 @@ function FileViewer({ file, currentPath }) {
             {currentPath && (
               <div className="relative">
                 <button
-                  className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                   onClick={() => setShowSyncCommand(!showSyncCommand)}
                 >
                   Download Directory
@@ -263,7 +263,7 @@ function FileViewer({ file, currentPath }) {
               </div>
             )}
             <button 
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               onClick={handleDownload}
             >
               Download

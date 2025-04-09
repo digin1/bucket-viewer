@@ -153,14 +153,14 @@ function App() {
             )}
             {config && config.bucket_name && (
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
                 onClick={disconnectBucket}
               >
                 Disconnect
               </button>
             )}
             <button
-              className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               onClick={() => setIsConfigOpen(true)}
             >
               Settings
@@ -183,7 +183,7 @@ function App() {
             <div className="text-4xl mb-4">⚠️</div>
             <p>{error}</p>
             <button
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
               onClick={() => setIsConfigOpen(true)}
             >
               Configure Connection
