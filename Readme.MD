@@ -4,7 +4,7 @@
 
 A modern, user-friendly web application for browsing, previewing, and downloading files from public Amazon S3 buckets and S3-compatible storage services.
 
-![S3 Bucket Viewer Screenshot]()
+![S3 Bucket Viewer Screenshot](https://raw.githubusercontent.com/digin1/s3-bucket-viewer/refs/heads/main/images/screenshot1.png)
 
 ## 🚀 Features
 
@@ -39,7 +39,7 @@ A modern, user-friendly web application for browsing, previewing, and downloadin
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/s3-bucket-viewer.git
+git clone https://github.com/digin1/s3-bucket-viewer.git
 cd s3-bucket-viewer
 
 # Start the application
@@ -126,4 +126,4 @@ This application is designed for public S3 buckets only. It uses the `--no-sign-
 
 ---
 
-Made with ❤️ by [Your Name/Organization]
+Made with ❤️ by [Digin Dominic]
