@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import TextViewer from './FileTypeHandlers/TextViewer';
 import ImageViewer from './FileTypeHandlers/ImageViewer';
@@ -12,6 +12,27 @@ function FileViewer({ file, currentPath }) {
   const [error, setError] = useState(null);
   const [showSyncCommand, setShowSyncCommand] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
+  const [localBasePath, setLocalBasePath] = useState('');
+  const syncCommandRef = useRef(null);
+  
+  // Handle clicks outside the sync command dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (syncCommandRef.current && !syncCommandRef.current.contains(event.target)) {
+        setShowSyncCommand(false);
+      }
+    }
+    
+    // Add event listener when dropdown is open
+    if (showSyncCommand) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    // Clean up event listener
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSyncCommand]);
   
   // Get URL parameters for the sync command
   const getUrlParams = () => {
@@ -22,6 +43,32 @@ function FileViewer({ file, currentPath }) {
     };
   };
   
+  // Set default local base path when bucket changes
+  useEffect(() => {
+    const { bucket } = getUrlParams();
+    if (bucket) {
+      setLocalBasePath(`./s3_${bucket.split('-').join('_')}`);
+    }
+  }, []);
+  
+  // Calculate the full local path that mirrors the S3 path structure
+  const getFullLocalPath = () => {
+    // Start with the base path
+    let path = localBasePath;
+    
+    // If there's a current path, append it to maintain the same directory structure locally
+    if (currentPath) {
+      path += `/${currentPath}`;
+    }
+    
+    return path;
+  };
+  
+  // Update local path handler
+  const handleLocalPathChange = (e) => {
+    setLocalBasePath(e.target.value);
+  };
+  
   // Generate the AWS S3 sync command
   const getSyncCommand = () => {
     const { endpoint, bucket } = getUrlParams();
@@ -29,8 +76,7 @@ function FileViewer({ file, currentPath }) {
     if (!bucket) {
       return 'Please configure bucket in settings first';
     }
-    const destPath = `./${bucket.split('-').join('_')}`;
-    return `aws s3 sync s3://${bucket}${currentPath ? '/' + currentPath : ''} ${destPath} --no-sign-request ${endpoint ? '--endpoint-url ' + endpoint : ''}`;
+    return `aws s3 sync s3://${bucket}${currentPath ? '/' + currentPath : ''} ${getFullLocalPath()} --no-sign-request ${endpoint ? '--endpoint-url ' + endpoint : ''}`;
   };
   
   // Copy sync command to clipboard
@@ -100,10 +146,11 @@ function FileViewer({ file, currentPath }) {
                   </button>
                   
                   {showSyncCommand && (
-                    <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
+                    <div ref={syncCommandRef} className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
                       <div className="p-3">
                         <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
                         <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
+                        
                         <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
                           {getSyncCommand()}
                         </div>
@@ -188,10 +235,11 @@ function FileViewer({ file, currentPath }) {
                 </button>
                 
                 {showSyncCommand && (
-                  <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
+                  <div ref={syncCommandRef} className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
                     <div className="p-3">
                       <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
                       <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
+                      
                       <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
                         {getSyncCommand()}
                       </div>
@@ -248,7 +296,7 @@ function FileViewer({ file, currentPath }) {
               <DocxViewer content={fileData.preview} />
             )}
             
-            {fileData.type === 'binary' || fileData.type === 'unsupported' && (
+            {(fileData.type === 'binary' || fileData.type === 'unsupported') && (
               <div className="text-center p-8 text-gray-600">
                 <p className="mb-4">{fileData.preview}</p>
                 <p>Please download the file to view its contents.</p>

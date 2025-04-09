@@ -117,6 +117,20 @@ function App() {
     setSelectedFile(null);
   };
 
+  // Disconnect from bucket
+  const disconnectBucket = () => {
+    // Clear selected file and path
+    setSelectedFile(null);
+    setCurrentPath('');
+    
+    // Clear URL parameters
+    const newUrl = window.location.pathname;
+    window.history.pushState({ path: '' }, '', newUrl);
+    
+    // Open config panel
+    setIsConfigOpen(true);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <header className="bg-blue-600 text-white p-4 shadow-md">
@@ -136,6 +150,14 @@ function App() {
                 endpoint={config.endpoint_url}
                 currentPath={currentPath}
               />
+            )}
+            {config && config.bucket_name && (
+              <button
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                onClick={disconnectBucket}
+              >
+                Disconnect
+              </button>
             )}
             <button
               className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500"

@@ -11,42 +11,13 @@ from botocore.config import Config
 app = Flask(__name__)
 CORS(app)
 
-# Default configuration - removed sensitive information
-DEFAULT_CONFIG = {
+# Default configuration stored in memory
+config = {
     'endpoint_url': '',
     'bucket_name': ''
 }
 
-# Configuration path
-CONFIG_PATH = 'config.json'
-
-# Load or create configuration
-def load_config():
-    try:
-        if os.path.exists(CONFIG_PATH):
-            with open(CONFIG_PATH, 'r') as f:
-                return json.load(f)
-        else:
-            with open(CONFIG_PATH, 'w') as f:
-                json.dump(DEFAULT_CONFIG, f, indent=2)
-            return DEFAULT_CONFIG
-    except Exception as e:
-        print(f"Error loading config: {e}")
-        return DEFAULT_CONFIG
-
-def save_config(config):
-    try:
-        with open(CONFIG_PATH, 'w') as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving config: {e}")
-        return False
-
-# Initialize with config
-config = load_config()
-
-# Function to create S3 client with current config
+# Function to create S3 client using the in-memory config
 def get_s3_client():
     return boto3.client(
         's3',
@@ -56,7 +27,7 @@ def get_s3_client():
         config=Config(signature_version=UNSIGNED)
     )
 
-# Get current bucket name from config
+# Get the current bucket name from the in-memory config
 def get_bucket_name():
     return config.get('bucket_name')
 
@@ -65,17 +36,17 @@ def handle_config():
     global config
     
     if request.method == 'GET':
-        # Check for URL parameters
+        # Optionally override with URL parameters
         endpoint_url = request.args.get('endpoint')
         bucket_name = request.args.get('bucket')
         
-        # If URL parameters are provided, update the config temporarily
+        # Update config temporarily if parameters are provided
         temp_config = config.copy()
         if endpoint_url and bucket_name:
             temp_config['endpoint_url'] = endpoint_url
             temp_config['bucket_name'] = bucket_name
         
-        # Remove sensitive information for frontend
+        # Remove sensitive information (if any) for frontend purposes
         safe_config = temp_config.copy()
         if 'aws_secret_access_key' in safe_config:
             safe_config['aws_secret_access_key'] = '********' if safe_config['aws_secret_access_key'] else ''
@@ -85,13 +56,12 @@ def handle_config():
     elif request.method == 'POST':
         new_config = request.json
         
-        # Preserve secret if not provided or masked
+        # Preserve secret if masked
         if new_config.get('aws_secret_access_key') == '********' and config.get('aws_secret_access_key'):
             new_config['aws_secret_access_key'] = config.get('aws_secret_access_key')
         
-        # Update config
+        # Update the in-memory config (no file persistence)
         config.update(new_config)
-        save_config(config)
         
         return jsonify({"message": "Configuration updated successfully", "status": "success"})
 
@@ -99,12 +69,11 @@ def handle_config():
 def list_objects():
     prefix = request.args.get('prefix', '')
     
-    # Check for URL parameters that might override the config
+    # Allow URL parameters to override the in-memory config
     endpoint_url = request.args.get('endpoint')
     bucket_name = request.args.get('bucket')
     
     try:
-        # Use the standard S3 client or create a new one with URL parameters
         if endpoint_url and bucket_name:
             s3_client = boto3.client(
                 's3',
@@ -124,11 +93,10 @@ def list_objects():
             Delimiter='/'
         )
         
-        # Extract files and folders
-        files = []
+        # Extract folders and files from the S3 response
         folders = []
+        files = []
         
-        # Handle common prefixes (folders)
         for item in response.get('CommonPrefixes', []):
             folder_name = item['Prefix'].rstrip('/').split('/')[-1] + '/'
             folders.append({
@@ -137,9 +105,8 @@ def list_objects():
                 'type': 'folder'
             })
         
-        # Handle objects (files)
         for item in response.get('Contents', []):
-            # Skip if this is the prefix itself or ends with '/'
+            # Skip if this key is the prefix itself or if it represents a folder
             if item['Key'] == prefix or item['Key'].endswith('/'):
                 continue
             
@@ -170,7 +137,6 @@ def get_file():
     file_path = request.args.get('path', '')
     preview = request.args.get('preview', 'false').lower() == 'true'
     
-    # Check for URL parameters that might override the config
     endpoint_url = request.args.get('endpoint')
     bucket_name = request.args.get('bucket')
     
@@ -178,7 +144,6 @@ def get_file():
         return jsonify({'error': 'File path is required'}), 400
     
     try:
-        # Use the standard S3 client or create a new one with URL parameters
         if endpoint_url and bucket_name:
             s3_client = boto3.client(
                 's3',
@@ -193,25 +158,25 @@ def get_file():
             current_bucket = get_bucket_name()
         
         if preview:
-            # Get file extension
+            # Determine the file extension
             file_ext = os.path.splitext(file_path)[1].lower()[1:]
             
-            # Create temp file
+            # Create a temporary file with the correct suffix
             with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_ext}') as temp:
                 temp_path = temp.name
             
-            # Download the file to temp location
+            # Download the file from S3
             s3_client.download_file(current_bucket, file_path, temp_path)
             
-            # Get preview data based on file type
+            # Get a preview of the file based on its type
             preview_data = get_file_preview(temp_path, file_ext)
             
-            # Clean up temp file
+            # Clean up the temporary file
             os.unlink(temp_path)
             
             return jsonify(preview_data)
         else:
-            # For direct download
+            # For full file download, create a temporary file
             with tempfile.NamedTemporaryFile(delete=False) as temp:
                 temp_path = temp.name
             
@@ -230,7 +195,6 @@ def get_file():
 def get_file_info():
     file_path = request.args.get('path', '')
     
-    # Check for URL parameters that might override the config
     endpoint_url = request.args.get('endpoint')
     bucket_name = request.args.get('bucket')
     
@@ -238,7 +202,6 @@ def get_file_info():
         return jsonify({'error': 'File path is required'}), 400
     
     try:
-        # Use the standard S3 client or create a new one with URL parameters
         if endpoint_url and bucket_name:
             s3_client = boto3.client(
                 's3',
@@ -252,17 +215,14 @@ def get_file_info():
             s3_client = get_s3_client()
             current_bucket = get_bucket_name()
         
-        # Get object metadata
         response = s3_client.head_object(
             Bucket=current_bucket,
             Key=file_path
         )
         
-        # Extract file name and extension
         file_name = file_path.split('/')[-1]
         file_ext = os.path.splitext(file_name)[1].lower()[1:]
         
-        # Construct file info object
         file_info = {
             'name': file_name,
             'path': file_path,
