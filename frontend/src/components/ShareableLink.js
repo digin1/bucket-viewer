@@ -6,33 +6,38 @@ function ShareableLink() {
   
   // Update the URL when it changes
   useEffect(() => {
+    // Function to get the current full URL with parameters
     const updateUrl = () => {
-      // Get the actual current URL
-      const fullUrl = window.location.href;
-      setCurrentUrl(fullUrl);
+      setCurrentUrl(window.location.href);
     };
     
+    // Initial URL capture
     updateUrl();
     
-    // Listen for changes to the URL (like when navigating folders)
+    // Listen for URL changes
     const handleUrlChange = () => {
       updateUrl();
     };
     
     // Add event listeners for URL changes
     window.addEventListener('popstate', handleUrlChange);
-    
-    // Custom event to catch programmatic URL changes
     window.addEventListener('urlchange', handleUrlChange);
+    
+    // Periodically check for URL changes (as a fallback)
+    const intervalId = setInterval(updateUrl, 1000);
     
     return () => {
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('urlchange', handleUrlChange);
+      clearInterval(intervalId);
     };
   }, []);
   
   const copyLinkToClipboard = () => {
-    navigator.clipboard.writeText(currentUrl)
+    // Ensure we're copying the most up-to-date URL
+    const urlToCopy = window.location.href;
+    
+    navigator.clipboard.writeText(urlToCopy)
       .then(() => {
         setShowToast(true);
         setTimeout(() => {
@@ -48,18 +53,17 @@ function ShareableLink() {
   const getDisplayUrl = () => {
     try {
       const url = new URL(currentUrl);
-      // Show the domain and pathname without the query string
       return `${url.origin}${url.pathname}`;
     } catch (e) {
-      return currentUrl;
+      return window.location.origin + window.location.pathname;
     }
   };
   
   // Function to get a simplified version of the query parameters
   const getDisplayParams = () => {
     try {
-      const url = new URL(currentUrl);
-      const params = new URLSearchParams(url.search);
+      // Always use the live URL parameters
+      const params = new URLSearchParams(window.location.search);
       
       const endpoint = params.get('endpoint');
       const bucket = params.get('bucket');
@@ -88,14 +92,14 @@ function ShareableLink() {
       
       return displayParams ? `?${displayParams}` : '';
     } catch (e) {
-      return '';
+      return window.location.search || '';
     }
   };
   
   return (
     <div className="relative flex items-center">
       <div className="flex-1 bg-blue-700 rounded-l px-3 py-1 overflow-hidden flex items-center">
-        <div className="flex-1 text-white text-sm truncate font-mono" title={currentUrl}>
+        <div className="flex-1 text-white text-sm truncate font-mono" title={currentUrl || window.location.href}>
           {getDisplayUrl()}<span className="text-blue-300">{getDisplayParams()}</span>
         </div>
       </div>
