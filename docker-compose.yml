@@ -7,20 +7,11 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - FLASK_ENV=production  # Changed to production for lower memory footprint
+      - FLASK_ENV=development
     ports:
-      - "5050:5000"
+      - "5050:5000"  # Changed from 5000:5000
     networks:
-      - bucket-viewer-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.6'
-          memory: 150M
-        reservations:
-          cpus: '0.2'
-          memory: 100M
-    restart: unless-stopped
+      - bucket-viewer-network  
   
   frontend:
     build:
@@ -29,20 +20,11 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports:
-      - "8080:80"
+      - "8080:80"  # Changed from 3000:80
     depends_on:
       - backend  
     networks:
-      - bucket-viewer-network
-    deploy:
-      resources:
-        limits:
-          cpus: '0.6'
-          memory: 200M
-        reservations:
-          cpus: '0.2'
-          memory: 150M
-    restart: unless-stopped
+      - bucket-viewer-network  
 
 volumes:
   node_modules:
