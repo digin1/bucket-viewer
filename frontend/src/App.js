@@ -3,6 +3,7 @@ import BucketExplorer from './components/BucketExplorer';
 import FileViewer from './components/FileViewer';
 import ConfigPanel from './components/ConfigPanel';
 import SyncCommandBox from './components/SyncCommandBox';
+import ShareableLink from './components/ShareableLink';
 import axios from 'axios';
 
 function App() {
@@ -119,6 +120,9 @@ function App() {
       const newUrl = `${window.location.pathname}?${newParams.toString()}`;
       window.history.pushState({ path: '' }, '', newUrl);
       
+      // Dispatch a custom event for URL change
+      window.dispatchEvent(new Event('urlchange'));
+      
       setError(null);
     } catch (err) {
       setError('Failed to save configuration: ' + err.message);
@@ -133,6 +137,9 @@ function App() {
     setCurrentPath(newPath);
     // Reset selected file whenever the path changes
     setSelectedFile(null);
+    
+    // Dispatch a custom event for URL change
+    window.dispatchEvent(new Event('urlchange'));
   };
 
   // Disconnect from bucket
@@ -157,6 +164,9 @@ function App() {
       const newUrl = window.location.pathname;
       window.history.pushState({ path: '' }, '', newUrl);
       
+      // Dispatch a custom event for URL change
+      window.dispatchEvent(new Event('urlchange'));
+      
       // Open config panel
       setIsConfigOpen(true);
       
@@ -172,38 +182,45 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <header className="bg-blue-600 text-white p-4 shadow-md">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">S3 Bucket Viewer</h1>
-            {config && config.bucket_name && (
-              <p className="text-sm opacity-80">
-                {config.bucket_name} • {config.endpoint_url}
-              </p>
-            )}
-          </div>
-          <div className="flex space-x-2">
-            {config && config.bucket_name && (
-              <SyncCommandBox 
-                bucket={config.bucket_name}
-                endpoint={config.endpoint_url}
-                currentPath={currentPath}
-              />
-            )}
-            {config && config.bucket_name && (
+        <div className="flex flex-col space-y-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">S3 Bucket Viewer</h1>
+              {config && config.bucket_name && (
+                <p className="text-sm opacity-80">
+                  {config.bucket_name} • {config.endpoint_url}
+                </p>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              {config && config.bucket_name && (
+                <SyncCommandBox 
+                  bucket={config.bucket_name}
+                  endpoint={config.endpoint_url}
+                  currentPath={currentPath}
+                />
+              )}
+              {config && config.bucket_name && (
+                <button
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                  onClick={disconnectBucket}
+                >
+                  Disconnect
+                </button>
+              )}
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
-                onClick={disconnectBucket}
+                className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                onClick={() => setIsConfigOpen(true)}
               >
-                Disconnect
+                Settings
               </button>
-            )}
-            <button
-              className="px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              onClick={() => setIsConfigOpen(true)}
-            >
-              Settings
-            </button>
+            </div>
           </div>
+          
+          {/* Shareable Link Bar */}
+          {config && config.bucket_name && !isConfigOpen && (
+            <ShareableLink />
+          )}
         </div>
       </header>
 

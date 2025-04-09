@@ -78,6 +78,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       // Update browser URL without reloading the page
       const newUrl = `${window.location.pathname}?${newParams.toString()}`;
       window.history.pushState({ path: path }, '', newUrl);
+      
+      // Dispatch a custom event for URL change
+      window.dispatchEvent(new Event('urlchange'));
     }
   };
   
