@@ -31,7 +31,7 @@ def get_s3_client():
 def get_bucket_name():
     return config.get('bucket_name')
 
-@app.route('/api/config', methods=['GET', 'POST'])
+@app.route('/api/config', methods=['GET', 'POST', 'DELETE'])
 def handle_config():
     global config
     
@@ -40,11 +40,19 @@ def handle_config():
         endpoint_url = request.args.get('endpoint')
         bucket_name = request.args.get('bucket')
         
+        # If no endpoint or bucket in URL, return current config
+        if not endpoint_url or not bucket_name:
+            # Return a copy of current config
+            safe_config = config.copy()
+            if 'aws_secret_access_key' in safe_config:
+                safe_config['aws_secret_access_key'] = '********' if safe_config['aws_secret_access_key'] else ''
+            return jsonify(safe_config)
+        
         # Update config temporarily if parameters are provided
-        temp_config = config.copy()
-        if endpoint_url and bucket_name:
-            temp_config['endpoint_url'] = endpoint_url
-            temp_config['bucket_name'] = bucket_name
+        temp_config = {
+            'endpoint_url': endpoint_url,
+            'bucket_name': bucket_name
+        }
         
         # Remove sensitive information (if any) for frontend purposes
         safe_config = temp_config.copy()
@@ -64,6 +72,15 @@ def handle_config():
         config.update(new_config)
         
         return jsonify({"message": "Configuration updated successfully", "status": "success"})
+    
+    elif request.method == 'DELETE':
+        # Reset the configuration to default values
+        config.clear()
+        config.update({
+            'endpoint_url': '',
+            'bucket_name': ''
+        })
+        return jsonify({"message": "Configuration cleared successfully", "status": "success"})
 
 @app.route('/api/list', methods=['GET'])
 def list_objects():
@@ -86,6 +103,14 @@ def list_objects():
         else:
             s3_client = get_s3_client()
             current_bucket = get_bucket_name()
+            
+            # Return empty result if no bucket configured
+            if not current_bucket:
+                return jsonify({
+                    'currentPrefix': prefix,
+                    'folders': [],
+                    'files': []
+                })
         
         response = s3_client.list_objects_v2(
             Bucket=current_bucket,

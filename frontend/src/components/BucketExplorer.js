@@ -26,14 +26,22 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       }
       
       const response = await axios.get(url);
-      setBucketContent(response.data);
-      onPathChange(prefix);
       
-      // Update breadcrumbs
-      updateBreadcrumbs(prefix);
-      
-      // Update the browser URL to include the path
-      updateBrowserUrl(prefix);
+      // Handle case where response is empty (no bucket configured)
+      if (response.data.folders.length === 0 && 
+          response.data.files.length === 0 && 
+          !bucket) {
+        setError('No bucket configured. Please configure a bucket in Settings.');
+      } else {
+        setBucketContent(response.data);
+        onPathChange(prefix);
+        
+        // Update breadcrumbs
+        updateBreadcrumbs(prefix);
+        
+        // Update the browser URL to include the path
+        updateBrowserUrl(prefix);
+      }
     } catch (err) {
       if (err.response?.status === 403) {
         setError('Access denied. Please check your credentials in Settings.');
@@ -120,16 +128,31 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       const urlParams = new URLSearchParams(window.location.search);
       const pathFromUrl = urlParams.get('path');
       
-      // If there's a path in the URL, use it instead of the currentPath prop
-      fetchBucketContent(pathFromUrl || currentPath);
+      // Check if there's a bucket in the URL
+      const bucket = urlParams.get('bucket');
+      
+      // Only fetch if there's a bucket
+      if (bucket) {
+        // If there's a path in the URL, use it instead of the currentPath prop
+        fetchBucketContent(pathFromUrl || currentPath);
+      } else {
+        setError('No bucket configured. Please configure a bucket in Settings.');
+      }
+      
       setInitialLoad(false);
     }
   }, [initialLoad, currentPath]);
   
   // React to changes in currentPath from parent component
   useEffect(() => {
-    if (!initialLoad && currentPath) {
-      fetchBucketContent(currentPath);
+    if (!initialLoad && currentPath !== undefined) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const bucket = urlParams.get('bucket');
+      
+      // Only fetch if there's a bucket
+      if (bucket) {
+        fetchBucketContent(currentPath);
+      }
     }
   }, [currentPath, initialLoad]);
   
@@ -212,7 +235,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       {/* Error state */}
       {error && (
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-red-500 p-4">{error}</div>
+          <div className="text-red-500 p-4 text-center">{error}</div>
         </div>
       )}
       

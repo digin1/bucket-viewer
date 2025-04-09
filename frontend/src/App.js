@@ -33,28 +33,46 @@ function App() {
         const { endpoint, bucket, path } = getUrlParams();
 
         // If we have endpoint and bucket in URL, use these
-        let url = '/api/config';
         if (endpoint && bucket) {
-          url += `?endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
-          // Set isConfigOpen to false as we have valid parameters
+          const response = await axios.get(`/api/config?endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`);
+          setConfig(response.data);
+          
+          // Set initial path from URL if provided
+          if (path) {
+            setCurrentPath(path);
+          }
+          
+          // Don't show config panel as we have valid parameters
           setIsConfigOpen(false);
         } else {
-          // If no URL params, show config panel by default
-          setIsConfigOpen(true);
-        }
-
-        const response = await axios.get(url);
-        setConfig(response.data);
-
-        // Set initial path from URL if provided
-        if (path) {
-          setCurrentPath(path);
+          // If no URL params, check if there's a stored config
+          const response = await axios.get('/api/config');
+          
+          // If there's a valid config with bucket name, use it
+          if (response.data && response.data.bucket_name) {
+            setConfig(response.data);
+            setIsConfigOpen(false);
+          } else {
+            // Otherwise set default config and show config panel
+            setConfig({
+              endpoint_url: 'https://s3.amazonaws.com',
+              bucket_name: ''
+            });
+            setIsConfigOpen(true);
+          }
         }
 
         setError(null);
       } catch (err) {
         setError('Failed to load configuration: ' + err.message);
         console.error(err);
+        
+        // Set default config
+        setConfig({
+          endpoint_url: 'https://s3.amazonaws.com',
+          bucket_name: ''
+        });
+        
         // Show config panel if there's an error
         setIsConfigOpen(true);
       } finally {
@@ -118,17 +136,37 @@ function App() {
   };
 
   // Disconnect from bucket
-  const disconnectBucket = () => {
-    // Clear selected file and path
-    setSelectedFile(null);
-    setCurrentPath('');
-    
-    // Clear URL parameters
-    const newUrl = window.location.pathname;
-    window.history.pushState({ path: '' }, '', newUrl);
-    
-    // Open config panel
-    setIsConfigOpen(true);
+  const disconnectBucket = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Call the backend to clear the config
+      await axios.delete('/api/config');
+      
+      // Clear selected file and path
+      setSelectedFile(null);
+      setCurrentPath('');
+      
+      // Update state with empty bucket
+      setConfig({
+        endpoint_url: 'https://s3.amazonaws.com',
+        bucket_name: ''
+      });
+      
+      // Clear URL parameters
+      const newUrl = window.location.pathname;
+      window.history.pushState({ path: '' }, '', newUrl);
+      
+      // Open config panel
+      setIsConfigOpen(true);
+      
+      setError(null);
+    } catch (err) {
+      setError('Failed to disconnect: ' + err.message);
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -137,7 +175,7 @@ function App() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">S3 Bucket Viewer</h1>
-            {config && (
+            {config && config.bucket_name && (
               <p className="text-sm opacity-80">
                 {config.bucket_name} • {config.endpoint_url}
               </p>
