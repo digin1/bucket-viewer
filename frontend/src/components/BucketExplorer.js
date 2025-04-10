@@ -293,11 +293,27 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       {/* Content */}
       {!isLoading && !error && (
         <div className="flex-1 overflow-auto">
+          {/* Directory Stats */}
+          {(bucketContent.folders.length > 0 || bucketContent.files.length > 0) && (
+            <div className="bg-blue-50 p-3 border-b border-blue-100 flex justify-between items-center">
+              <div className="text-sm text-blue-700">
+                <span className="font-medium">{bucketContent.folders.length}</span> folder{bucketContent.folders.length !== 1 && 's'}, <span className="font-medium">{bucketContent.files.length}</span> file{bucketContent.files.length !== 1 && 's'}
+              </div>
+              {/* Calculate total file size */}
+              {bucketContent.files.length > 0 && (
+                <div className="text-xs text-blue-600">
+                  Current directory size: {formatFileSize(bucketContent.files.reduce((total, file) => total + (file.size || 0), 0))}
+                </div>
+              )}
+            </div>
+          )}
+          
           {/* Folders */}
           {bucketContent.folders.length > 0 && (
             <div>
-              <div className="sticky top-0 bg-gray-200 px-4 py-1 font-medium text-gray-700">
-                Folders
+              <div className="sticky top-0 bg-gray-200 px-4 py-1 font-medium text-gray-700 flex justify-between items-center">
+                <span>Folders</span>
+                <span className="text-xs text-gray-500">{bucketContent.folders.length} item{bucketContent.folders.length !== 1 && 's'}</span>
               </div>
               <ul>
                 {bucketContent.folders.map((folder, index) => (
@@ -318,8 +334,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
           {/* Files */}
           {bucketContent.files.length > 0 && (
             <div>
-              <div className="sticky top-0 bg-gray-200 px-4 py-1 font-medium text-gray-700">
-                Files
+              <div className="sticky top-0 bg-gray-200 px-4 py-1 font-medium text-gray-700 flex justify-between items-center">
+                <span>Files</span>
+                <span className="text-xs text-gray-500">
+                  {bucketContent.files.length} item{bucketContent.files.length !== 1 && 's'} 
+                  {bucketContent.files.length > 0 && ` • ${formatFileSize(bucketContent.files.reduce((total, file) => total + (file.size || 0), 0))}`}
+                </span>
               </div>
               <ul>
                 {bucketContent.files.map((file, index) => {
