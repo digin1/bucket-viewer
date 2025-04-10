@@ -10,147 +10,85 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1); // Start with 1 instead of null
-  const [pageTokens, setPageTokens] = useState({ 1: null }); // Map page numbers to tokens
-  const [totalItems, setTotalItems] = useState(0); // Track total number of items if available
-  const [itemsPerPage, setItemsPerPage] = useState(100); // Default items per page from API
-  const [hasMorePages, setHasMorePages] = useState(false); // Flag to indicate if more pages exist
+  const [totalPages, setTotalPages] = useState(1); // Start with 1, update as we go
+  const [pageTokens, setPageTokens] = useState({ 1: null });
+  const [totalItems, setTotalItems] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(500);
+  const [hasMorePages, setHasMorePages] = useState(false);
 
-  // Format file size with proper units (B, KB, MB, GB, TB)
+  // Format file size
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 B';
-
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-
-    // Use TB for extremely large files
-    if (i >= 4) {
-      return `${(bytes / Math.pow(1024, 4)).toFixed(2)} TB`;
-    }
-    // Use GB for very large files
-    else if (i === 3) {
-      return `${(bytes / Math.pow(1024, 3)).toFixed(2)} GB`;
-    }
-    // Use MB for large files
-    else if (i === 2) {
-      return `${Math.round(bytes / Math.pow(1024, 2))} MB`;
-    }
-    // Use KB for medium files
-    else if (i === 1) {
-      return `${Math.round(bytes / 1024)} KB`;
-    }
-    // Use B for small files
-    else {
-      return `${bytes} B`;
-    }
+    if (i >= 4) return `${(bytes / Math.pow(1024, 4)).toFixed(2)} TB`;
+    else if (i === 3) return `${(bytes / Math.pow(1024, 3)).toFixed(2)} GB`;
+    else if (i === 2) return `${Math.round(bytes / Math.pow(1024, 2))} MB`;
+    else if (i === 1) return `${Math.round(bytes / 1024)} KB`;
+    else return `${bytes} B`;
   };
 
-  // Fetch data from the API
+  // Fetch bucket content
   const fetchBucketContent = async (prefix = '', token = null, isPageNavigation = false, targetPage = null) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Get URL parameters to pass along
       const urlParams = new URLSearchParams(window.location.search);
       const endpoint = urlParams.get('endpoint');
       const bucket = urlParams.get('bucket');
 
-      // Build the URL with parameters if they exist
       let url = `/api/list?prefix=${encodeURIComponent(prefix)}`;
       if (endpoint && bucket) {
         url += `&endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
       }
-
-      // Add continuation token if provided
       if (token) {
         url += `&continuation_token=${encodeURIComponent(token)}`;
       }
 
-      console.log(`Fetching: ${url}`);
       const response = await axios.get(url);
-      console.log('API Response:', response.data);
 
-      // Handle case where response is empty (no bucket configured)
-      if (response.data.folders.length === 0 &&
-        response.data.files.length === 0 &&
-        !bucket) {
+      if (response.data.folders.length === 0 && response.data.files.length === 0 && !bucket) {
         setError('No bucket configured. Please configure a bucket in Settings.');
       } else {
         setBucketContent(response.data);
 
-        // Store items per page
         if (response.data.maxKeys) {
           setItemsPerPage(response.data.maxKeys);
         }
 
-        // Check if we have total count information from the backend
-        if (response.data.keyCount !== undefined) {
-          setTotalItems(prevTotal => {
-            // If this is a page navigation, don't update the total
-            if (isPageNavigation) return prevTotal;
-
-            // For initial load or directory change, set the new total
-            return response.data.keyCount;
-          });
+        if (response.data.keyCount !== undefined && !isPageNavigation) {
+          setTotalItems(response.data.keyCount);
+          setTotalPages(Math.max(1, Math.ceil(response.data.keyCount / itemsPerPage)));
         }
 
-        // Update truncation state
         setHasMorePages(response.data.isTruncated || false);
-        console.log('Has more pages:', response.data.isTruncated);
 
-        // If we have more pages but totalPages is 1, update it to at least 2
-        if (response.data.isTruncated && totalPages <= 1) {
-          console.log("Setting totalPages to at least 2 since more pages are available");
-          setTotalPages(prev => Math.max(prev, 2));
-        }
-
-        // Only update path and breadcrumbs when not paginating
         if (!isPageNavigation) {
           onPathChange(prefix);
           updateBreadcrumbs(prefix);
           updateBrowserUrl(prefix);
-
-          // Reset pagination when changing directories
           setCurrentPage(1);
-          setPageTokens({ 1: null }); // Reset to first page
+          setPageTokens({ 1: null });
+          setTotalPages(response.data.isTruncated ? 2 : 1); // Minimum 2 if more pages exist
         } else if (targetPage) {
-          // If we're navigating to a specific page, update the current page
           setCurrentPage(targetPage);
+          if (!response.data.isTruncated && targetPage >= totalPages) {
+            setTotalPages(targetPage); // Update totalPages when we reach the end
+          }
         }
 
-        // Store the continuation token for the next page
         if (response.data.continuationToken) {
           const nextPage = targetPage ? targetPage + 1 : currentPage + 1;
           setPageTokens(prev => ({
             ...prev,
             [nextPage]: response.data.continuationToken
           }));
-        }
-
-        // Estimate total pages based on total items and items per page
-        if (totalItems > 0 && itemsPerPage > 0 && !isPageNavigation) {
-          const estimatedPages = Math.ceil(totalItems / itemsPerPage);
-          // Ensure totalPages is at least 2 if hasMorePages is true
-          if (response.data.isTruncated && estimatedPages <= 1) {
-            console.log("Setting totalPages to 2 since more pages are available");
-            setTotalPages(2);
-          } else {
-            setTotalPages(estimatedPages > 0 ? estimatedPages : 1);
-            console.log(`Estimated ${estimatedPages} total pages based on ${totalItems} items`);
+          if (nextPage > totalPages) {
+            setTotalPages(nextPage); // Expand totalPages as we discover more
           }
-        } else if (response.data.isTruncated === false && !isPageNavigation) {
-          // If there's no truncation on first load, we only have one page
-          setTotalPages(1);
-          console.log('Setting total pages to 1 (no truncation)');
-        } else if (!response.data.isTruncated && isPageNavigation) {
-          // If we've reached a page with no truncation during navigation,
-          // update the total pages to the current page if needed
-          setTotalPages(prev => {
-            const newTotal = Math.max(prev, targetPage || currentPage);
-            console.log(`Updating total pages to ${newTotal} (reached end during navigation)`);
-            return newTotal;
-          });
+        } else if (isPageNavigation && !response.data.isTruncated) {
+          setTotalPages(currentPage); // Set final total when no more pages
         }
       }
     } catch (err) {
@@ -167,43 +105,23 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     }
   };
 
-  // Function to handle page changes
+  // Handle page changes
   const handlePageChange = (pageNumber) => {
-    console.log(`Page change requested: ${pageNumber}, current: ${currentPage}`);
+    if (pageNumber < 1 || (!hasMorePages && pageNumber > totalPages)) return;
 
-    // Don't compare with totalPages when hasMorePages is true
-    // This is the key fix - we should always allow navigation to the next page when hasMorePages is true
-    if (pageNumber < 1 || (!hasMorePages && totalPages && pageNumber > totalPages)) {
-      console.log(`Invalid page number: ${pageNumber}`);
-      return;
-    }
-
-    // If we already have a token for this page, use it
     if (pageTokens[pageNumber]) {
-      console.log(`Using existing token for page ${pageNumber}`);
-      setCurrentPage(pageNumber);
       fetchBucketContent(currentPath, pageTokens[pageNumber], true, pageNumber);
-      return;
-    }
-
-    // If we're moving forward one page and we have the previous page's token
-    if (pageNumber === currentPage + 1 && pageTokens[currentPage]) {
-      console.log(`Moving to next page (${pageNumber}) using token from current page`);
-      setCurrentPage(pageNumber);
+    } else if (pageNumber === currentPage + 1 && pageTokens[currentPage]) {
       fetchBucketContent(currentPath, pageTokens[currentPage], true, pageNumber);
-      return;
+    } else {
+      navigateToPage(pageNumber);
     }
-
-    // For other page jumps, we need to navigate sequentially
-    console.log(`Sequential navigation needed to reach page ${pageNumber}`);
-    navigateToPage(pageNumber);
   };
 
-  // Helper function for sequential page navigation
+  // Sequential page navigation
   const navigateToPage = async (targetPage) => {
-    // Find the closest known page that is less than the target page
     const knownPages = Object.keys(pageTokens).map(Number).sort((a, b) => a - b);
-    let startPage = 1; // Default to page 1
+    let startPage = 1;
     let startToken = null;
 
     for (let i = knownPages.length - 1; i >= 0; i--) {
@@ -214,18 +132,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       }
     }
 
-    console.log(`Starting sequential navigation from page ${startPage} to target page ${targetPage}`);
-
-    // Display loading state
     setIsLoading(true);
-
-    // Navigate page by page until we reach our target
     let currentToken = startToken;
     let currentPageNum = startPage;
 
     while (currentPageNum < targetPage) {
       try {
-        // Construct the URL for the next page
         const urlParams = new URLSearchParams(window.location.search);
         const endpoint = urlParams.get('endpoint');
         const bucket = urlParams.get('bucket');
@@ -234,193 +146,116 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
         if (endpoint && bucket) {
           url += `&endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
         }
-
-        // Add continuation token if we have one
         if (currentToken) {
           url += `&continuation_token=${encodeURIComponent(currentToken)}`;
         }
 
-        console.log(`Fetching page ${currentPageNum + 1} data...`);
         const response = await axios.get(url);
-
         currentPageNum++;
-        console.log(`Advanced to page ${currentPageNum}`);
 
-        // Store this page's token for future use
         if (response.data.continuationToken) {
-          setPageTokens(prev => {
-            const newTokens = {
-              ...prev,
-              [currentPageNum]: response.data.continuationToken
-            };
-            console.log(`Stored token for page ${currentPageNum}`);
-            return newTokens;
-          });
+          setPageTokens(prev => ({
+            ...prev,
+            [currentPageNum]: response.data.continuationToken
+          }));
+          if (currentPageNum >= totalPages) {
+            setTotalPages(currentPageNum + 1); // Expand totalPages
+          }
         } else {
-          setPageTokens(prev => {
-            const newTokens = {
-              ...prev,
-              [currentPageNum]: null
-            };
-            console.log(`Stored null token for page ${currentPageNum} (last page)`);
-            return newTokens;
-          });
+          setPageTokens(prev => ({
+            ...prev,
+            [currentPageNum]: null
+          }));
+          setTotalPages(currentPageNum); // Set final total
+          setHasMorePages(false);
         }
 
-        // Get the token for the next page
         currentToken = response.data.continuationToken;
 
-        // If we've reached the target page, set the content
         if (currentPageNum === targetPage) {
-          console.log(`Reached target page ${targetPage}, updating content`);
           setBucketContent(response.data);
           setHasMorePages(response.data.isTruncated || false);
         }
 
-        // If there's no more continuation token, we've reached the end
-        if (!currentToken) {
-          console.log(`No more continuation tokens, reached end at page ${currentPageNum}`);
-          // Update total pages if we found the last page
-          setTotalPages(currentPageNum);
-          break;
-        }
+        if (!currentToken) break;
       } catch (err) {
-        console.error(`Error during sequential navigation:`, err);
+        console.error('Error during sequential navigation:', err);
         setError('Failed to load page: ' + (err.response?.data?.error || err.message));
         break;
       }
     }
 
-    // Update current page to the target page
-    const finalPage = Math.min(targetPage, currentPageNum);
-    console.log(`Setting current page to ${finalPage}`);
-    setCurrentPage(finalPage);
+    setCurrentPage(Math.min(targetPage, totalPages));
     setIsLoading(false);
   };
 
-  // Update the browser URL to include the current path
+  // Update browser URL
   const updateBrowserUrl = (path) => {
     const urlParams = new URLSearchParams(window.location.search);
     const endpoint = urlParams.get('endpoint');
     const bucket = urlParams.get('bucket');
 
     if (endpoint && bucket) {
-      // Create new URL params
       const newParams = new URLSearchParams();
       newParams.set('endpoint', endpoint);
       newParams.set('bucket', bucket);
+      if (path) newParams.set('path', path);
+      else newParams.delete('path');
 
-      // Only add path if it's not empty
-      if (path) {
-        newParams.set('path', path);
-      } else {
-        newParams.delete('path');
-      }
-
-      // Update browser URL without reloading the page
       const newUrl = `${window.location.pathname}?${newParams.toString()}`;
-      window.history.pushState({ path: path }, '', newUrl);
-
-      // Dispatch a custom event for URL change
+      window.history.pushState({ path }, '', newUrl);
       window.dispatchEvent(new Event('urlchange'));
     }
   };
 
-  // Handle browser back/forward buttons
+  // Handle browser navigation
   useEffect(() => {
     const handlePopState = (event) => {
-      // Get the path from the URL when back/forward buttons are clicked
       const urlParams = new URLSearchParams(window.location.search);
       const pathFromUrl = urlParams.get('path') || '';
-
-      // Only fetch content if the path has changed
-      if (pathFromUrl !== currentPath) {
-        fetchBucketContent(pathFromUrl);
-      }
+      if (pathFromUrl !== currentPath) fetchBucketContent(pathFromUrl);
     };
 
-    // Add event listener for popstate (back/forward button clicks)
     window.addEventListener('popstate', handlePopState);
-
-    // Clean up
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [currentPath]);
 
-  // Update breadcrumbs based on current path
+  // Update breadcrumbs
   const updateBreadcrumbs = (path) => {
     const parts = path.split('/').filter(Boolean);
-
     const crumbs = [{ name: 'Home', path: '' }];
     let currentPath = '';
 
     parts.forEach(part => {
       currentPath += part + '/';
-      crumbs.push({
-        name: part,
-        path: currentPath
-      });
+      crumbs.push({ name: part, path: currentPath });
     });
 
     setBreadcrumbs(crumbs);
   };
 
-  // Load initial content on component mount or when currentPath changes
+  // Initial load
   useEffect(() => {
     if (initialLoad) {
-      // First check if there's a path in the URL
       const urlParams = new URLSearchParams(window.location.search);
       const pathFromUrl = urlParams.get('path');
-
-      // Check if there's a bucket in the URL
       const bucket = urlParams.get('bucket');
 
-      // Only fetch if there's a bucket
-      if (bucket) {
-        // If there's a path in the URL, use it instead of the currentPath prop
-        fetchBucketContent(pathFromUrl || currentPath);
-      } else {
-        setError('No bucket configured. Please configure a bucket in Settings.');
-      }
+      if (bucket) fetchBucketContent(pathFromUrl || currentPath);
+      else setError('No bucket configured. Please configure a bucket in Settings.');
 
       setInitialLoad(false);
     }
   }, [initialLoad, currentPath]);
 
-  // React to changes in currentPath from parent component
+  // React to currentPath changes
   useEffect(() => {
     if (!initialLoad && currentPath !== undefined) {
       const urlParams = new URLSearchParams(window.location.search);
       const bucket = urlParams.get('bucket');
-
-      // Only fetch if there's a bucket
-      if (bucket) {
-        fetchBucketContent(currentPath);
-      }
+      if (bucket) fetchBucketContent(currentPath);
     }
   }, [currentPath, initialLoad]);
-
-  // Update totalPages when totalItems or itemsPerPage changes
-  useEffect(() => {
-    if (totalItems > 0 && itemsPerPage > 0) {
-      const estimatedPages = Math.ceil(totalItems / itemsPerPage);
-      console.log(`useEffect: Updating total pages to ${estimatedPages} based on ${totalItems} items`);
-
-      // Don't set totalPages to 1 when we have isTruncated=true (hasMorePages)
-      if (hasMorePages && estimatedPages <= 1) {
-        console.log("API reports more pages available, setting totalPages to at least 2");
-        setTotalPages(Math.max(2, estimatedPages));
-      } else {
-        setTotalPages(estimatedPages > 0 ? estimatedPages : 1);
-      }
-    } else if (hasMorePages && totalPages <= 1) {
-      // If we don't know total items but we know there are more pages,
-      // make sure totalPages is at least 2
-      console.log("Setting minimum totalPages to 2 since hasMorePages=true");
-      setTotalPages(2);
-    }
-  }, [totalItems, itemsPerPage, hasMorePages]);
 
   // Handle folder click
   const handleFolderClick = (folderPath) => {
@@ -437,157 +272,67 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     fetchBucketContent(path);
   };
 
-  // Get file icon based on extension
+  // Get file icon
   const getFileIcon = (extension) => {
     const iconMap = {
-      // Text files
-      'txt': '📄',
-      'md': '📝',
-      'json': '📋',
-      'xml': '📋',
-      'html': '🌐',
-      'css': '🎨',
-      'js': '📜',
-      'py': '🐍',
-
-      // Images
-      'jpg': '🖼️',
-      'jpeg': '🖼️',
-      'png': '🖼️',
-      'gif': '🖼️',
-      'tif': '🖼️',
-      'tiff': '🖼️',
-      'svg': '🖼️',
-
-      // Documents
-      'pdf': '📑',
-      'docx': '📘',
-      'doc': '📘',
-      'xlsx': '📊',
-      'xls': '📊',
-
-      // Other
-      'csv': '📊',
-      'zip': '🗜️',
-      'tar': '🗜️',
-      'gz': '🗜️',
-      'rar': '🗜️',
-
-      // Media
-      'mp3': '🎵',
-      'wav': '🎵',
-      'mp4': '🎬',
-      'mov': '🎬',
-      'avi': '🎬',
-
-      // Programming
-      'java': '☕',
-      'cpp': '🔧',
-      'c': '🔧',
-      'rb': '💎',
-      'php': '🐘',
-      'go': '🔵',
-      'rs': '🦀'
+      'txt': '📄', 'md': '📝', 'json': '📋', 'xml': '📋', 'html': '🌐', 'css': '🎨', 'js': '📜', 'py': '🐍',
+      'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️', 'tif': '🖼️', 'tiff': '🖼️', 'svg': '🖼️',
+      'pdf': '📑', 'docx': '📘', 'doc': '📘', 'xlsx': '📊', 'xls': '📊',
+      'csv': '📊', 'zip': '🗜️', 'tar': '🗜️', 'gz': '🗜️', 'rar': '🗜️',
+      'mp3': '🎵', 'wav': '🎵', 'mp4': '🎬', 'mov': '🎬', 'avi': '🎬',
+      'java': '☕', 'cpp': '🔧', 'c': '🔧', 'rb': '💎', 'php': '🐘', 'go': '🔵', 'rs': '🦀'
     };
-
     return iconMap[extension?.toLowerCase()] || '📄';
   };
 
-  // Render pagination controls
+  // Render pagination
   const renderPagination = () => {
-    // Don't render if we don't have enough data to calculate pagination
-    if (totalPages <= 1 && !hasMorePages) return null;
+    if (totalPages === 1 && !hasMorePages) return null;
 
-    // Calculate which page numbers to show
-    const showPageNums = [];
+    const pageNumbers = [];
+    const maxPagesToShow = 5;
+    const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-    // Always show first page
-    showPageNums.push(1);
-
-    // Calculate range around current page
-    const rangeStart = Math.max(2, currentPage - 1);
-    const rangeEnd = Math.min(totalPages - 1 || Infinity, currentPage + 1);
-
-    // Add ellipsis if there's a gap after page 1
-    if (rangeStart > 2) {
-      showPageNums.push('...');
-    }
-
-    // Add pages in range
-    for (let i = rangeStart; i <= rangeEnd; i++) {
-      showPageNums.push(i);
-    }
-
-    // Add ellipsis if there's a gap before last page
-    if (totalPages && rangeEnd < totalPages - 1) {
-      showPageNums.push('...');
-    }
-
-    // Always show last page if more than 1 page and we know the total
-    if (totalPages && totalPages > 1) {
-      showPageNums.push(totalPages);
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
     }
 
     return (
-      <div className="flex justify-center my-3 bg-white py-2 border-t border-gray-200 relative z-10">
-        <div className="flex items-center space-x-1">
-          {/* Previous button */}
+      <div className="flex justify-center my-3 bg-white py-2 border-t border-gray-200">
+        <div className="flex items-center space-x-2">
           <button
-            className={`px-2 py-1 rounded ${currentPage === 1
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-blue-600 hover:bg-blue-50'
-              }`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (currentPage > 1) handlePageChange(currentPage - 1);
-            }}
+            className={`px-3 py-1 rounded ${currentPage === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+            onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            type="button"
           >
-            ← Prev
+            Previous
           </button>
 
-          {/* Page numbers */}
-          {showPageNums.map((page, index) => (
-            <React.Fragment key={index}>
-              {page === '...' ? (
-                <span className="px-2 text-gray-500">...</span>
-              ) : (
-                <button
-                  className={`px-2 py-1 rounded ${page === currentPage
-                      ? 'bg-blue-600 text-white'
-                      : 'text-blue-600 hover:bg-blue-50'
-                    }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log(`Clicked page ${page}`);
-                    handlePageChange(page);
-                  }}
-                  type="button"
-                >
-                  {page}
-                </button>
-              )}
-            </React.Fragment>
+          {startPage > 1 && <span className="px-2 text-gray-500">...</span>}
+
+          {pageNumbers.map(page => (
+            <button
+              key={page}
+              className={`px-3 py-1 rounded ${page === currentPage ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-50'}`}
+              onClick={() => handlePageChange(page)}
+            >
+              {page}
+            </button>
           ))}
 
-          {/* Next button - show if we know there are more pages or if current page isn't the last known page */}
+          {endPage < totalPages && <span className="px-2 text-gray-500">...</span>}
+
           <button
-            className={`px-2 py-1 rounded ${(!hasMorePages && currentPage === totalPages)
-                ? 'text-gray-400 cursor-not-allowed'
-                : 'text-blue-600 hover:bg-blue-50'
-              }`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasMorePages || currentPage < totalPages) {
-                handlePageChange(currentPage + 1);
-              }
-            }}
+            className={`px-3 py-1 rounded ${!hasMorePages && currentPage === totalPages ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+            onClick={() => handlePageChange(currentPage + 1)}
             disabled={!hasMorePages && currentPage === totalPages}
-            type="button"
           >
-            Next →
+            Next
           </button>
+        </div>
+        <div className="ml-4 text-sm text-gray-600">
+          Page {currentPage} of {totalPages}
         </div>
       </div>
     );
@@ -595,25 +340,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
 
   // Get total count message
   const getTotalCountMessage = () => {
-    // Use total item count if available from API
-    if (totalItems > 0) {
-      return `${totalItems} total items`;
-    }
-
-    // Otherwise use the current page count
-    return `${bucketContent.folders.length + bucketContent.files.length} items shown`;
+    const itemsOnPage = bucketContent.folders.length + bucketContent.files.length;
+    return `Only showing ${itemsOnPage} items`;
   };
 
   return (
     <div className="h-full flex flex-col">
-      {/* Debug info - Uncomment temporarily to debug pagination issues */}
-      {false && (
-        <div className="bg-gray-100 p-1 text-xs text-gray-600 border-b">
-          Debug: Pages={totalPages}, Current={currentPage}, HasMore={String(hasMorePages)},
-          Items={totalItems}, KnownTokens={Object.keys(pageTokens).join(', ')}
-        </div>
-      )}
-
       {/* Breadcrumbs */}
       <div className="bg-gray-100 p-2 flex flex-wrap items-center text-sm overflow-x-auto whitespace-nowrap">
         {breadcrumbs.map((crumb, index) => (
@@ -647,19 +379,14 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       {/* Content */}
       {!isLoading && !error && (
         <div className="flex-1 overflow-auto">
-          {/* Directory Stats */}
+          {/* Directory Stats - Updated display */}
           {(bucketContent.folders.length > 0 || bucketContent.files.length > 0) && (
             <div className="bg-blue-50 p-3 border-b border-blue-100 flex justify-between items-center">
               <div className="text-sm text-blue-700">
                 <span className="font-medium">{bucketContent.folders.length}</span> folder{bucketContent.folders.length !== 1 && 's'},
                 <span className="font-medium">{bucketContent.files.length}</span> file{bucketContent.files.length !== 1 && 's'}
-                {totalItems > 0 && (
-                  <span className="ml-2 text-gray-500">
-                    ({getTotalCountMessage()})
-                  </span>
-                )}
+                <span className="ml-2 text-gray-500">{getTotalCountMessage()}</span>
               </div>
-              {/* Calculate total file size */}
               {bucketContent.files.length > 0 && (
                 <div className="text-xs text-blue-600">
                   Current directory size: {formatFileSize(bucketContent.files.reduce((total, file) => total + (file.size || 0), 0))}
@@ -668,16 +395,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
             </div>
           )}
 
-          {/* Add pagination at the top if there's pagination needed */}
-          {(totalPages > 1 || hasMorePages) && (
-            <div className="border-b border-gray-200 bg-gray-50">
-              <div className="flex justify-between items-center px-4 py-2">
-                <span className="text-xs text-gray-500">
-                  Page {currentPage} {totalPages > 1 ? `of ${totalPages}` : hasMorePages ? '(more available)' : ''}
-                </span>
-                {renderPagination()}
-              </div>
-            </div>
+          {/* Pagination */}
+          {(totalPages > 1 || hasMorePages || currentPage > 1) && (
+            <div className="border-b border-gray-200 bg-gray-50">{renderPagination()}</div>
           )}
 
           {/* Folders */}
@@ -716,12 +436,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
               </div>
               <ul className="divide-y divide-gray-100">
                 {bucketContent.files.map((file, index) => {
-                  // Check if file is large (for preview purposes) or special type
-                  const isLargeFile = file.size > 104857600; // 100MB
+                  const isLargeFile = file.size > 104857600;
                   const fileExt = file.extension?.toLowerCase();
                   const isArchiveFile = ['zip', 'tar', 'gz', 'rar'].includes(fileExt);
-
-                  // Format file size using the helper function
                   const formattedSize = formatFileSize(file.size);
 
                   return (
@@ -733,29 +450,18 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
                       >
                         <span className="mr-2 flex-shrink-0">{getFileIcon(file.extension)}</span>
                         <span className="truncate flex-grow">{file.name}</span>
-
-                        {/* File size and type indicators */}
                         <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
-                          {/* File size indicator */}
                           <span className={`text-xs ${isLargeFile ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
                             {formattedSize}
                           </span>
-
-                          {/* Special file type indicators */}
                           {isLargeFile && (
-                            <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-full">
-                              Large
-                            </span>
+                            <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-full">Large</span>
                           )}
                           {isArchiveFile && (
-                            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                              Archive
-                            </span>
+                            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full">Archive</span>
                           )}
                           {!file.supported && !isArchiveFile && !isLargeFile && (
-                            <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded-full">
-                              No Preview
-                            </span>
+                            <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded-full">No Preview</span>
                           )}
                         </div>
                       </button>
@@ -766,14 +472,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
             </div>
           )}
 
-          {/* Pagination controls at the bottom */}
+          {/* Pagination at bottom */}
           {renderPagination()}
 
           {/* Empty state */}
           {bucketContent.folders.length === 0 && bucketContent.files.length === 0 && (
-            <div className="flex-1 flex items-center justify-center p-8 text-gray-500">
-              This folder is empty
-            </div>
+            <div className="flex-1 flex items-center justify-center p-8 text-gray-500">This folder is empty</div>
           )}
         </div>
       )}

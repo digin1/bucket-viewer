@@ -136,7 +136,7 @@ def list_objects():
             'Bucket': current_bucket,
             'Prefix': prefix,
             'Delimiter': '/',
-            'MaxKeys': 100  # Reduce from default 1000 to more manageable chunks
+            'MaxKeys': 500  # Reduce from default 1000 to more manageable chunks
         }
         
         # Add continuation token if provided

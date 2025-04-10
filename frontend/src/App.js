@@ -22,7 +22,7 @@ function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(33); // Width in percentage
+  const [leftPanelWidth, setLeftPanelWidth] = useState(45); // Width in percentage
   const resizingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
