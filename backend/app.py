@@ -183,14 +183,19 @@ def list_objects():
             'files': files
         }
         
+        # Add total item count info from S3
+        # KeyCount includes both files and folders
+        if 'KeyCount' in response:
+            result['keyCount'] = response['KeyCount']
+        
+        # Also pass the total found count if available (may not be fully accurate for large buckets)
+        if 'MaxKeys' in response:
+            result['maxKeys'] = response['MaxKeys']
+        
         # Add continuation token if more results exist
         if response.get('IsTruncated'):
             result['continuationToken'] = response.get('NextContinuationToken')
             result['isTruncated'] = True
-        
-        # Add total count from S3 if available
-        if 'KeyCount' in response:
-            result['keyCount'] = response['KeyCount']
         
         return jsonify(result)
     
