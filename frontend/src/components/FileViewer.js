@@ -276,11 +276,33 @@ function FileViewer({ file, currentPath }) {
 
     if (!bucket) return;
 
-    // Construct direct S3 URL for the file
-    const directS3Url = `${endpoint}/${bucket}/${file.path}`;
+    // Create a properly formatted S3 URL
+    // For standard S3, the format is typically: endpoint/bucket/path
+    // Create a temporary link element to handle the download
+    const link = document.createElement('a');
 
-    // Open in a new tab for download
-    window.open(directS3Url, '_blank');
+    // Different S3 providers may format URLs differently
+    // For standard AWS S3:
+    let directS3Url = '';
+
+    // Handle standard AWS S3 URL format
+    if (endpoint === 'https://s3.amazonaws.com') {
+      // For AWS S3, the format is https://bucket-name.s3.amazonaws.com/key
+      directS3Url = `https://${bucket}.s3.amazonaws.com/${file.path}`;
+    } else {
+      // For other S3-compatible providers, try the format endpoint/bucket/path
+      directS3Url = `${endpoint}/${bucket}/${file.path}`;
+    }
+
+    link.href = directS3Url;
+    link.download = file.name; // Set the filename for the download
+    link.target = '_blank'; // Open in a new tab if direct download doesn't work
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Log the download attempt
+    console.log(`Downloading from: ${directS3Url}`);
   };
 
   // Render empty state if no file is selected
