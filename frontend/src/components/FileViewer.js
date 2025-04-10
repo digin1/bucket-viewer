@@ -14,14 +14,14 @@ function FileViewer({ file, currentPath }) {
   const [copiedToast, setCopiedToast] = useState(false);
   const [localBasePath, setLocalBasePath] = useState('');
   const syncCommandRef = useRef(null);
-  
+
   // Format file size with proper units (B, KB, MB, GB, TB)
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 B';
-    
+
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    
+
     // Use TB for extremely large files
     if (i >= 4) {
       return `${(bytes / Math.pow(1024, 4)).toFixed(2)} TB`;
@@ -43,7 +43,7 @@ function FileViewer({ file, currentPath }) {
       return `${bytes} B`;
     }
   };
-  
+
   // Handle clicks outside the sync command dropdown
   useEffect(() => {
     function handleClickOutside(event) {
@@ -51,18 +51,18 @@ function FileViewer({ file, currentPath }) {
         setShowSyncCommand(false);
       }
     }
-    
+
     // Add event listener when dropdown is open
     if (showSyncCommand) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    
+
     // Clean up event listener
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showSyncCommand]);
-  
+
   // Get URL parameters for the sync command
   const getUrlParams = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -71,7 +71,7 @@ function FileViewer({ file, currentPath }) {
       bucket: urlParams.get('bucket') || ''
     };
   };
-  
+
   // Set default local base path when bucket changes
   useEffect(() => {
     const { bucket } = getUrlParams();
@@ -79,25 +79,25 @@ function FileViewer({ file, currentPath }) {
       setLocalBasePath(`./s3_${bucket.split('-').join('_')}`);
     }
   }, []);
-  
+
   // Calculate the full local path that mirrors the S3 path structure
   const getFullLocalPath = () => {
     // Start with the base path
     let path = localBasePath;
-    
+
     // If there's a current path, append it to maintain the same directory structure locally
     if (currentPath) {
       path += `/${currentPath}`;
     }
-    
+
     return path;
   };
-  
+
   // Update local path handler
   const handleLocalPathChange = (e) => {
     setLocalBasePath(e.target.value);
   };
-  
+
   // Generate the AWS S3 sync command
   const getSyncCommand = () => {
     const { endpoint, bucket } = getUrlParams();
@@ -107,7 +107,7 @@ function FileViewer({ file, currentPath }) {
     }
     return `aws s3 sync s3://${bucket}${currentPath ? '/' + currentPath : ''} ${getFullLocalPath()} --no-sign-request ${endpoint ? '--endpoint-url ' + endpoint : ''}`;
   };
-  
+
   // Copy sync command to clipboard
   const copyCommandToClipboard = () => {
     navigator.clipboard.writeText(getSyncCommand())
@@ -121,7 +121,7 @@ function FileViewer({ file, currentPath }) {
         console.error('Failed to copy: ', err);
       });
   };
-  
+
   // Get file icon based on extension
   const getFileIcon = (extension) => {
     const iconMap = {
@@ -134,7 +134,7 @@ function FileViewer({ file, currentPath }) {
       'css': '🎨',
       'js': '📜',
       'py': '🐍',
-      
+
       // Images
       'jpg': '🖼️',
       'jpeg': '🖼️',
@@ -143,28 +143,28 @@ function FileViewer({ file, currentPath }) {
       'tif': '🖼️',
       'tiff': '🖼️',
       'svg': '🖼️',
-      
+
       // Documents
       'pdf': '📑',
       'docx': '📘',
       'doc': '📘',
       'xlsx': '📊',
       'xls': '📊',
-      
+
       // Other
       'csv': '📊',
       'zip': '🗜️',
       'tar': '🗜️',
       'gz': '🗜️',
       'rar': '🗜️',
-      
+
       // Media
       'mp3': '🎵',
       'wav': '🎵',
       'mp4': '🎬',
       'mov': '🎬',
       'avi': '🎬',
-      
+
       // Programming
       'java': '☕',
       'cpp': '🔧',
@@ -174,14 +174,14 @@ function FileViewer({ file, currentPath }) {
       'go': '🔵',
       'rs': '🦀'
     };
-    
+
     return iconMap[extension?.toLowerCase()] || '📄';
   };
-  
+
   // Large file preview component
   const LargeFilePreview = ({ fileData }) => {
     const icon = getFileIcon(fileData.extension);
-    
+
     return (
       <div className="text-center p-8">
         <div className="mb-6 text-9xl">{icon}</div>
@@ -190,7 +190,7 @@ function FileViewer({ file, currentPath }) {
         <p className="text-gray-600 mb-8">
           Files over 100MB can be downloaded but not previewed in the browser.
         </p>
-        <button 
+        <button
           className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           onClick={handleDownload}
         >
@@ -199,14 +199,15 @@ function FileViewer({ file, currentPath }) {
       </div>
     );
   };
-  
+
   useEffect(() => {
     if (!file) return;
-    
+
+    // Updated fetchFilePreview function for FileViewer.js
     const fetchFilePreview = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       // Check if file is an archive file
       const fileExt = file.extension?.toLowerCase();
       if (['zip', 'tar', 'gz', 'rar'].includes(fileExt)) {
@@ -220,7 +221,7 @@ function FileViewer({ file, currentPath }) {
         setIsLoading(false);
         return;
       }
-      
+
       // Check if file size exceeds preview limit (100MB = 104857600 bytes)
       const MAX_PREVIEW_SIZE = 104857600;
       if (file.size > MAX_PREVIEW_SIZE) {
@@ -234,10 +235,26 @@ function FileViewer({ file, currentPath }) {
         setIsLoading(false);
         return;
       }
-      
+
       try {
-        // Pass the file size to the backend to avoid unnecessary head_object calls
-        const response = await axios.get(`/api/file?path=${file.path}&preview=true&size=${file.size || 0}`);
+        // Get URL parameters to include in the request
+        const urlParams = new URLSearchParams(window.location.search);
+        const endpoint = urlParams.get('endpoint');
+        const bucket = urlParams.get('bucket');
+
+        // Build request URL with all necessary parameters
+        let requestUrl = `/api/file?path=${encodeURIComponent(file.path)}&preview=true&size=${file.size || 0}`;
+
+        // Add endpoint and bucket parameters if they exist
+        if (endpoint) {
+          requestUrl += `&endpoint=${encodeURIComponent(endpoint)}`;
+        }
+
+        if (bucket) {
+          requestUrl += `&bucket=${encodeURIComponent(bucket)}`;
+        }
+
+        const response = await axios.get(requestUrl);
         setFileData(response.data);
       } catch (err) {
         setError('Failed to load file preview: ' + (err.response?.data?.error || err.message));
@@ -246,21 +263,30 @@ function FileViewer({ file, currentPath }) {
         setIsLoading(false);
       }
     };
-    
+
     fetchFilePreview();
   }, [file]);
-  
+
   const handleDownload = () => {
     if (!file) return;
-    
-    // Create download link - allow all sizes
-    window.open(`/api/file?path=${file.path}`, '_blank');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const endpoint = urlParams.get('endpoint') || 'https://s3.amazonaws.com';
+    const bucket = urlParams.get('bucket');
+
+    if (!bucket) return;
+
+    // Construct direct S3 URL for the file
+    const directS3Url = `${endpoint}/${bucket}/${file.path}`;
+
+    // Open in a new tab for download
+    window.open(directS3Url, '_blank');
   };
-  
+
   // Render empty state if no file is selected
   if (!file) {
     const { bucket } = getUrlParams();
-    
+
     return (
       <div className="h-full flex flex-col bg-white">
         {/* Current directory info header */}
@@ -280,13 +306,13 @@ function FileViewer({ file, currentPath }) {
                   >
                     Download All Files
                   </button>
-                  
+
                   {showSyncCommand && (
                     <div ref={syncCommandRef} className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
                       <div className="p-3">
                         <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
                         <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
-                        
+
                         <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
                           {getSyncCommand()}
                         </div>
@@ -301,7 +327,7 @@ function FileViewer({ file, currentPath }) {
                       </div>
                     </div>
                   )}
-                  
+
                   {copiedToast && (
                     <div className="absolute top-full mt-2 right-0 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm whitespace-nowrap z-50">
                       Command copied to clipboard!
@@ -312,7 +338,7 @@ function FileViewer({ file, currentPath }) {
             </div>
           </div>
         )}
-        
+
         <div className="flex-1 flex items-center justify-center bg-white p-8">
           <div className="text-center text-gray-500">
             <div className="text-5xl mb-4">📄</div>
@@ -322,7 +348,7 @@ function FileViewer({ file, currentPath }) {
       </div>
     );
   }
-  
+
   // Render loading state
   if (isLoading) {
     return (
@@ -334,7 +360,7 @@ function FileViewer({ file, currentPath }) {
       </div>
     );
   }
-  
+
   // Render error state
   if (error) {
     return (
@@ -346,7 +372,7 @@ function FileViewer({ file, currentPath }) {
       </div>
     );
   }
-  
+
   // Render file preview based on type
   return (
     <div className="h-full flex flex-col bg-white">
@@ -369,13 +395,13 @@ function FileViewer({ file, currentPath }) {
                 >
                   Download Directory
                 </button>
-                
+
                 {showSyncCommand && (
                   <div ref={syncCommandRef} className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-10 w-96">
                     <div className="p-3">
                       <h3 className="font-medium text-gray-800 mb-1">AWS S3 Sync Command</h3>
                       <p className="text-xs text-gray-600 mb-2">Use this command with AWS CLI to download all files in this directory:</p>
-                      
+
                       <div className="bg-gray-100 p-2 rounded font-mono text-xs mb-2 overflow-x-auto text-gray-800">
                         {getSyncCommand()}
                       </div>
@@ -390,7 +416,7 @@ function FileViewer({ file, currentPath }) {
                     </div>
                   </div>
                 )}
-                
+
                 {copiedToast && (
                   <div className="absolute top-full mt-2 right-0 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm whitespace-nowrap z-50">
                     Command copied to clipboard!
@@ -398,7 +424,7 @@ function FileViewer({ file, currentPath }) {
                 )}
               </div>
             )}
-            <button 
+            <button
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               onClick={handleDownload}
             >
@@ -407,7 +433,7 @@ function FileViewer({ file, currentPath }) {
           </div>
         </div>
       </div>
-      
+
       {/* File content */}
       <div className="flex-1 overflow-auto p-4">
         {fileData && (
@@ -415,28 +441,28 @@ function FileViewer({ file, currentPath }) {
             {fileData.type === 'text' && (
               <TextViewer content={fileData.preview} extension={fileData.extension} />
             )}
-            
+
             {fileData.type === 'image' && (
               <ImageViewer base64Data={fileData.preview} mime={fileData.mime} />
             )}
-            
+
             {fileData.type === 'csv' && (
               <CsvViewer data={fileData.preview} />
             )}
-            
+
             {fileData.type === 'xlsx' && (
               <XlsxViewer data={fileData.preview} />
             )}
-            
+
             {fileData.type === 'docx' && (
               <DocxViewer content={fileData.preview} />
             )}
-            
+
             {/* Large file display with appropriate icon */}
             {fileData.type === 'too_large' && (
               <LargeFilePreview fileData={fileData} />
             )}
-            
+
             {/* Zip file display with appropriate icon */}
             {fileData.type === 'zip' && (
               <div className="text-center p-8">
@@ -446,7 +472,7 @@ function FileViewer({ file, currentPath }) {
                 <p className="text-gray-600 mb-8">
                   Archive files cannot be previewed directly in the browser.
                 </p>
-                <button 
+                <button
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onClick={handleDownload}
                 >
@@ -454,7 +480,7 @@ function FileViewer({ file, currentPath }) {
                 </button>
               </div>
             )}
-            
+
             {(fileData.type === 'binary' || fileData.type === 'unsupported') && (
               <div className="text-center p-8">
                 <div className="mb-6 text-9xl">{getFileIcon(file.extension) || '📄'}</div>
@@ -463,7 +489,7 @@ function FileViewer({ file, currentPath }) {
                 <p className="text-gray-600 mb-8">
                   This file type cannot be previewed in the browser.
                 </p>
-                <button 
+                <button
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   onClick={handleDownload}
                 >
@@ -471,7 +497,7 @@ function FileViewer({ file, currentPath }) {
                 </button>
               </div>
             )}
-            
+
             {fileData.type === 'error' && (
               <div className="text-center p-8 text-red-500">
                 <p>{fileData.preview}</p>

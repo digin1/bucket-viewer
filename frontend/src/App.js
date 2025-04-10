@@ -27,6 +27,36 @@ function App() {
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
+  // Save configuration to localStorage
+  const saveConfigToLocalStorage = (config) => {
+    // Add a connected flag to track whether the user has explicitly disconnected
+    const configWithState = {
+      ...config,
+      isConnected: true,
+      lastConnected: new Date().toISOString()
+    };
+    localStorage.setItem('s3-viewer-config', JSON.stringify(configWithState));
+  };
+
+  // Clear configuration from localStorage on disconnect
+  const clearConfigFromLocalStorage = () => {
+    // Instead of removing, mark as disconnected
+    const currentConfig = getConfigFromLocalStorage();
+    if (currentConfig) {
+      localStorage.setItem('s3-viewer-config', JSON.stringify({
+        ...currentConfig,
+        isConnected: false,
+        lastDisconnected: new Date().toISOString()
+      }));
+    }
+  };
+
+  // Get configuration from localStorage
+  const getConfigFromLocalStorage = () => {
+    const savedConfig = localStorage.getItem('s3-viewer-config');
+    return savedConfig ? JSON.parse(savedConfig) : null;
+  };
+
   // Get URL parameters
   const getUrlParams = () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -46,10 +76,13 @@ function App() {
         // Get URL parameters
         const { endpoint, bucket, path } = getUrlParams();
 
-        // If we have endpoint and bucket in URL, use these
+        // Priority 1: If we have endpoint and bucket in URL, use these
         if (endpoint && bucket) {
           const response = await axios.get(`/api/config?endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`);
           setConfig(response.data);
+          
+          // Also save this to localStorage
+          saveConfigToLocalStorage(response.data);
           
           // Set initial path from URL if provided
           if (path) {
@@ -59,20 +92,41 @@ function App() {
           // Don't show config panel as we have valid parameters
           setIsConfigOpen(false);
         } else {
-          // If no URL params, check if there's a stored config
-          const response = await axios.get('/api/config');
+          // Priority 2: Check localStorage for a connected config
+          const savedConfig = getConfigFromLocalStorage();
           
-          // If there's a valid config with bucket name, use it
-          if (response.data && response.data.bucket_name) {
-            setConfig(response.data);
+          if (savedConfig && savedConfig.isConnected && savedConfig.bucket_name) {
+            // Use the saved config
+            setConfig(savedConfig);
             setIsConfigOpen(false);
+            
+            // Also set it in the backend
+            await axios.post('/api/config', savedConfig);
+            
+            // Update URL to reflect config
+            const newParams = new URLSearchParams();
+            if (savedConfig.endpoint_url) newParams.set('endpoint', savedConfig.endpoint_url);
+            if (savedConfig.bucket_name) newParams.set('bucket', savedConfig.bucket_name);
+            
+            const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+            window.history.pushState({ path: '' }, '', newUrl);
           } else {
-            // Otherwise set default config and show config panel
-            setConfig({
-              endpoint_url: 'https://s3.amazonaws.com',
-              bucket_name: ''
-            });
-            setIsConfigOpen(true);
+            // Priority 3: Check if there's a server-side stored config
+            const response = await axios.get('/api/config');
+            
+            // If there's a valid config with bucket name, use it
+            if (response.data && response.data.bucket_name) {
+              setConfig(response.data);
+              setIsConfigOpen(false);
+              saveConfigToLocalStorage(response.data);
+            } else {
+              // Finally, if all else fails: set default config and show config panel
+              setConfig({
+                endpoint_url: 'https://s3.amazonaws.com',
+                bucket_name: ''
+              });
+              setIsConfigOpen(true);
+            }
           }
         }
 
@@ -154,6 +208,10 @@ function App() {
       await axios.post('/api/config', newConfig);
       setConfig(newConfig);
       setIsConfigOpen(false);
+      
+      // Save to localStorage
+      saveConfigToLocalStorage(newConfig);
+      
       // Reset selected file and path for new bucket
       setSelectedFile(null);
       setCurrentPath('');
@@ -199,6 +257,9 @@ function App() {
       // Clear selected file and path
       setSelectedFile(null);
       setCurrentPath('');
+      
+      // Mark as disconnected in localStorage
+      clearConfigFromLocalStorage();
       
       // Update state with empty bucket
       setConfig({
