@@ -8,6 +8,35 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [initialLoad, setInitialLoad] = useState(true);
   
+  // Format file size with proper units (B, KB, MB, GB, TB)
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B';
+    
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    
+    // Use TB for extremely large files
+    if (i >= 4) {
+      return `${(bytes / Math.pow(1024, 4)).toFixed(2)} TB`;
+    }
+    // Use GB for very large files
+    else if (i === 3) {
+      return `${(bytes / Math.pow(1024, 3)).toFixed(2)} GB`;
+    }
+    // Use MB for large files
+    else if (i === 2) {
+      return `${Math.round(bytes / Math.pow(1024, 2))} MB`;
+    }
+    // Use KB for medium files
+    else if (i === 1) {
+      return `${Math.round(bytes / 1024)} KB`;
+    }
+    // Use B for small files
+    else {
+      return `${bytes} B`;
+    }
+  };
+  
   // Fetch data from the API
   const fetchBucketContent = async (prefix = '') => {
     setIsLoading(true);
@@ -205,10 +234,29 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
       
       // Other
       'csv': '📊',
-      'zip': '🗜️'
+      'zip': '🗜️',
+      'tar': '🗜️',
+      'gz': '🗜️',
+      'rar': '🗜️',
+      
+      // Media
+      'mp3': '🎵',
+      'wav': '🎵',
+      'mp4': '🎬',
+      'mov': '🎬',
+      'avi': '🎬',
+      
+      // Programming
+      'java': '☕',
+      'cpp': '🔧',
+      'c': '🔧',
+      'rb': '💎',
+      'php': '🐘',
+      'go': '🔵',
+      'rs': '🦀'
     };
     
-    return iconMap[extension] || '📄';
+    return iconMap[extension?.toLowerCase()] || '📄';
   };
   
   return (
@@ -274,19 +322,55 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
                 Files
               </div>
               <ul>
-                {bucketContent.files.map((file, index) => (
-                  <li key={index}>
-                    <button 
-                      className={`w-full px-4 py-2 hover:bg-blue-50 text-left flex items-center ${
-                        file.supported ? '' : 'opacity-60'
-                      }`}
-                      onClick={() => handleFileClick(file)}
-                    >
-                      <span className="mr-2">{getFileIcon(file.extension)}</span>
-                      <span className="truncate">{file.name}</span>
-                    </button>
-                  </li>
-                ))}
+                {bucketContent.files.map((file, index) => {
+                  // Check if file is large (for preview purposes) or special type
+                  const isLargeFile = file.size > 104857600; // 100MB
+                  const fileExt = file.extension?.toLowerCase();
+                  const isArchiveFile = ['zip', 'tar', 'gz', 'rar'].includes(fileExt);
+                  
+                  // Format file size using the helper function
+                  const formattedSize = formatFileSize(file.size);
+                  
+                  return (
+                    <li key={index}>
+                      <button 
+                        className="w-full px-4 py-2 hover:bg-blue-50 text-left flex items-center"
+                        onClick={() => handleFileClick(file)}
+                        title={isLargeFile ? 'Large file - preview not available' : 
+                              isArchiveFile ? 'Archive file - preview not available' : 
+                              !file.supported ? 'File type not supported for preview' : ''}
+                      >
+                        <span className="mr-2">{getFileIcon(file.extension)}</span>
+                        <span className="truncate flex-grow">{file.name}</span>
+                        
+                        {/* File size and type indicators */}
+                        <div className="flex items-center space-x-2 ml-2">
+                          {/* File size indicator */}
+                          <span className={`text-xs ${isLargeFile ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
+                            {formattedSize}
+                          </span>
+                          
+                          {/* Special file type indicators */}
+                          {isLargeFile && (
+                            <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                              Large
+                            </span>
+                          )}
+                          {isArchiveFile && (
+                            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                              Archive
+                            </span>
+                          )}
+                          {!file.supported && !isArchiveFile && !isLargeFile && (
+                            <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-800 rounded-full">
+                              No Preview
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

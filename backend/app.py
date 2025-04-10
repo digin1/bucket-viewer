@@ -161,7 +161,7 @@ def list_objects():
                 'lastModified': item['LastModified'].isoformat(),
                 'type': 'file',
                 'extension': file_ext,
-                'supported': is_supported_type(file_ext)
+                'supported': is_supported_type(file_ext, item['Size'])
             })
         
         return jsonify({
@@ -177,6 +177,10 @@ def list_objects():
 def get_file():
     file_path = request.args.get('path', '')
     preview = request.args.get('preview', 'false').lower() == 'true'
+    
+    # Get file size from request parameter (if available)
+    file_size_str = request.args.get('size', '')
+    file_size = int(file_size_str) if file_size_str and file_size_str.isdigit() else None
     
     endpoint_url = request.args.get('endpoint')
     bucket_name = request.args.get('bucket')
@@ -201,9 +205,42 @@ def get_file():
             s3_client = get_s3_client()
             current_bucket = get_bucket_name()
         
+        file_name = file_path.split('/')[-1]
+        file_ext = os.path.splitext(file_name)[1].lower()[1:]
+        
+        # For preview requests only, check file size and type
         if preview:
-            # Determine the file extension
-            file_ext = os.path.splitext(file_path)[1].lower()[1:]
+            # Get file metadata only if size wasn't provided in request
+            if file_size is None:
+                try:
+                    response = s3_client.head_object(
+                        Bucket=current_bucket,
+                        Key=file_path
+                    )
+                    file_size = response.get('ContentLength', 0)
+                except Exception as e:
+                    # If head_object fails, continue and try to get the file anyway
+                    print(f"Error getting file metadata: {str(e)}")
+                    file_size = 0
+            
+            # Check if file is too large for preview (100MB = 104,857,600 bytes)
+            MAX_PREVIEW_SIZE = 104857600
+            if file_size and file_size > MAX_PREVIEW_SIZE:
+                # Format size for human-readable display
+                size_display = format_file_size(file_size)
+                return jsonify({
+                    'type': 'too_large',
+                    'preview': f'This file is {size_display}, which exceeds the preview size limit.',
+                    'size': file_size
+                })
+            
+            # Special handling for archive files
+            if file_ext.lower() in ['zip', 'tar', 'gz', 'rar']:
+                return jsonify({
+                    'type': 'zip',
+                    'preview': 'Archive files cannot be previewed. Please download to view contents.',
+                    'size': file_size or 0
+                })
             
             # Create a temporary file with the correct suffix
             with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{file_ext}') as temp:
@@ -220,7 +257,7 @@ def get_file():
             
             return jsonify(preview_data)
         else:
-            # For full file download, create a temporary file
+            # For direct downloads, always allow regardless of size
             with tempfile.NamedTemporaryFile(delete=False) as temp:
                 temp_path = temp.name
             
@@ -269,15 +306,16 @@ def get_file_info():
         
         file_name = file_path.split('/')[-1]
         file_ext = os.path.splitext(file_name)[1].lower()[1:]
+        file_size = response.get('ContentLength', 0)
         
         file_info = {
             'name': file_name,
             'path': file_path,
-            'size': response.get('ContentLength', 0),
+            'size': file_size,
             'lastModified': response.get('LastModified', '').isoformat() if hasattr(response.get('LastModified', ''), 'isoformat') else '',
             'type': 'file',
             'extension': file_ext,
-            'supported': is_supported_type(file_ext),
+            'supported': is_supported_type(file_ext, file_size),
             'metadata': {k: v for k, v in response.items() if k not in ['ResponseMetadata']}
         }
         
@@ -285,6 +323,26 @@ def get_file_info():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Helper function to format file size
+def format_file_size(bytes):
+    if bytes == 0:
+        return '0 B'
+    
+    # Define size units and thresholds
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    i = 0
+    
+    # Find the appropriate unit
+    while bytes >= 1024 and i < len(units) - 1:
+        bytes /= 1024
+        i += 1
+    
+    # Format with decimal places for GB and TB, rounded for smaller units
+    if i >= 3:  # GB or TB
+        return f"{bytes:.2f} {units[i]}"
+    else:
+        return f"{int(bytes)} {units[i]}"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

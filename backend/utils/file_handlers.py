@@ -11,18 +11,41 @@ SUPPORTED_TYPES = {
     'text': ['txt', 'md', 'json', 'csv', 'xml', 'html', 'css', 'js', 'py', 'r'],
     'image': ['jpg', 'jpeg', 'png', 'gif', 'tif', 'tiff', 'bmp', 'svg'],
     'document': ['docx', 'xlsx', 'pdf'],
+    'archive': ['zip', 'tar', 'gz', 'rar'],  # Archive files
     'other': []
 }
 
-def is_supported_type(extension):
-    """Check if file extension is supported for preview"""
-    for category in SUPPORTED_TYPES:
-        if extension in SUPPORTED_TYPES[category]:
+def is_supported_type(extension, size=None):
+    """Check if file extension is supported for preview
+    
+    Args:
+        extension (str): File extension without the dot
+        size (int, optional): File size in bytes. Defaults to None.
+    
+    Returns:
+        bool: True if the file type is supported and not too large
+    """
+    # Check size first if provided
+    if size is not None:
+        # 100MB size limit (104,857,600 bytes)
+        MAX_SIZE = 104857600
+        if size > MAX_SIZE:
+            return False
+    
+    # Check if it's an archive file (recognized but not previewable)
+    if extension.lower() in SUPPORTED_TYPES['archive']:
+        return False
+        
+    # Check file extension
+    for category, extensions in SUPPORTED_TYPES.items():
+        if extension.lower() in extensions:
             return True
+    
     return False
 
 def get_file_type(extension):
     """Get the file type category"""
+    extension = extension.lower() if extension else ''
     for category, extensions in SUPPORTED_TYPES.items():
         if extension in extensions:
             return category
@@ -44,6 +67,11 @@ def get_file_preview(file_path, extension):
                 return get_xlsx_preview(file_path)
             elif extension == 'pdf':
                 return {'type': 'pdf', 'preview': 'PDF preview not available'}
+        elif file_type == 'archive':
+            return {
+                'type': 'zip',
+                'preview': f'Archive files cannot be previewed. Please download to view contents.'
+            }
         
         # Default response for unsupported file types
         return {

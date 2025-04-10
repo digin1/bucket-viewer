@@ -15,6 +15,35 @@ function FileViewer({ file, currentPath }) {
   const [localBasePath, setLocalBasePath] = useState('');
   const syncCommandRef = useRef(null);
   
+  // Format file size with proper units (B, KB, MB, GB, TB)
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B';
+    
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    
+    // Use TB for extremely large files
+    if (i >= 4) {
+      return `${(bytes / Math.pow(1024, 4)).toFixed(2)} TB`;
+    }
+    // Use GB for very large files
+    else if (i === 3) {
+      return `${(bytes / Math.pow(1024, 3)).toFixed(2)} GB`;
+    }
+    // Use MB for large files
+    else if (i === 2) {
+      return `${Math.round(bytes / Math.pow(1024, 2))} MB`;
+    }
+    // Use KB for medium files
+    else if (i === 1) {
+      return `${Math.round(bytes / 1024)} KB`;
+    }
+    // Use B for small files
+    else {
+      return `${bytes} B`;
+    }
+  };
+  
   // Handle clicks outside the sync command dropdown
   useEffect(() => {
     function handleClickOutside(event) {
@@ -93,6 +122,84 @@ function FileViewer({ file, currentPath }) {
       });
   };
   
+  // Get file icon based on extension
+  const getFileIcon = (extension) => {
+    const iconMap = {
+      // Text files
+      'txt': '📄',
+      'md': '📝',
+      'json': '📋',
+      'xml': '📋',
+      'html': '🌐',
+      'css': '🎨',
+      'js': '📜',
+      'py': '🐍',
+      
+      // Images
+      'jpg': '🖼️',
+      'jpeg': '🖼️',
+      'png': '🖼️',
+      'gif': '🖼️',
+      'tif': '🖼️',
+      'tiff': '🖼️',
+      'svg': '🖼️',
+      
+      // Documents
+      'pdf': '📑',
+      'docx': '📘',
+      'doc': '📘',
+      'xlsx': '📊',
+      'xls': '📊',
+      
+      // Other
+      'csv': '📊',
+      'zip': '🗜️',
+      'tar': '🗜️',
+      'gz': '🗜️',
+      'rar': '🗜️',
+      
+      // Media
+      'mp3': '🎵',
+      'wav': '🎵',
+      'mp4': '🎬',
+      'mov': '🎬',
+      'avi': '🎬',
+      
+      // Programming
+      'java': '☕',
+      'cpp': '🔧',
+      'c': '🔧',
+      'rb': '💎',
+      'php': '🐘',
+      'go': '🔵',
+      'rs': '🦀'
+    };
+    
+    return iconMap[extension?.toLowerCase()] || '📄';
+  };
+  
+  // Large file preview component
+  const LargeFilePreview = ({ fileData }) => {
+    const icon = getFileIcon(fileData.extension);
+    
+    return (
+      <div className="text-center p-8">
+        <div className="mb-6 text-9xl">{icon}</div>
+        <h2 className="text-xl font-medium mb-4">{fileData.name || 'Large File'}</h2>
+        <p className="mb-4 text-amber-600">{fileData.preview}</p>
+        <p className="text-gray-600 mb-8">
+          Files over 100MB can be downloaded but not previewed in the browser.
+        </p>
+        <button 
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onClick={handleDownload}
+        >
+          Download File
+        </button>
+      </div>
+    );
+  };
+  
   useEffect(() => {
     if (!file) return;
     
@@ -100,8 +207,37 @@ function FileViewer({ file, currentPath }) {
       setIsLoading(true);
       setError(null);
       
+      // Check if file is an archive file
+      const fileExt = file.extension?.toLowerCase();
+      if (['zip', 'tar', 'gz', 'rar'].includes(fileExt)) {
+        setFileData({
+          type: 'zip',
+          preview: 'Archive files cannot be previewed. Please download to view contents.',
+          size: file.size || 0,
+          name: file.name,
+          extension: file.extension
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check if file size exceeds preview limit (100MB = 104857600 bytes)
+      const MAX_PREVIEW_SIZE = 104857600;
+      if (file.size > MAX_PREVIEW_SIZE) {
+        setFileData({
+          type: 'too_large',
+          preview: `This file is ${formatFileSize(file.size)}, which exceeds the preview size limit.`,
+          size: file.size,
+          name: file.name,
+          extension: file.extension
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       try {
-        const response = await axios.get(`/api/file?path=${file.path}&preview=true`);
+        // Pass the file size to the backend to avoid unnecessary head_object calls
+        const response = await axios.get(`/api/file?path=${file.path}&preview=true&size=${file.size || 0}`);
         setFileData(response.data);
       } catch (err) {
         setError('Failed to load file preview: ' + (err.response?.data?.error || err.message));
@@ -117,7 +253,7 @@ function FileViewer({ file, currentPath }) {
   const handleDownload = () => {
     if (!file) return;
     
-    // Create download link
+    // Create download link - allow all sizes
     window.open(`/api/file?path=${file.path}`, '_blank');
   };
   
@@ -220,7 +356,7 @@ function FileViewer({ file, currentPath }) {
           <div>
             <h2 className="text-lg font-medium">{file.name}</h2>
             <p className="text-sm text-gray-500">
-              {file.size ? `${(file.size / 1024).toFixed(2)} KB` : ''}
+              {file.size ? formatFileSize(file.size) : ''}
               {file.lastModified ? ` • Last modified: ${new Date(file.lastModified).toLocaleString()}` : ''}
             </p>
           </div>
@@ -296,10 +432,43 @@ function FileViewer({ file, currentPath }) {
               <DocxViewer content={fileData.preview} />
             )}
             
+            {/* Large file display with appropriate icon */}
+            {fileData.type === 'too_large' && (
+              <LargeFilePreview fileData={fileData} />
+            )}
+            
+            {/* Zip file display with appropriate icon */}
+            {fileData.type === 'zip' && (
+              <div className="text-center p-8">
+                <div className="mb-6 text-9xl">🗜️</div>
+                <h2 className="text-xl font-medium mb-4">{file.name}</h2>
+                <p className="mb-4 text-amber-600">{fileData.preview}</p>
+                <p className="text-gray-600 mb-8">
+                  Archive files cannot be previewed directly in the browser.
+                </p>
+                <button 
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onClick={handleDownload}
+                >
+                  Download Archive
+                </button>
+              </div>
+            )}
+            
             {(fileData.type === 'binary' || fileData.type === 'unsupported') && (
-              <div className="text-center p-8 text-gray-600">
-                <p className="mb-4">{fileData.preview}</p>
-                <p>Please download the file to view its contents.</p>
+              <div className="text-center p-8">
+                <div className="mb-6 text-9xl">{getFileIcon(file.extension) || '📄'}</div>
+                <h2 className="text-xl font-medium mb-4">{file.name}</h2>
+                <p className="mb-4 text-gray-600">{fileData.preview}</p>
+                <p className="text-gray-600 mb-8">
+                  This file type cannot be previewed in the browser.
+                </p>
+                <button 
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onClick={handleDownload}
+                >
+                  Download File
+                </button>
               </div>
             )}
             
