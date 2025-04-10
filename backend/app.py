@@ -99,6 +99,9 @@ def handle_config():
 def list_objects():
     prefix = request.args.get('prefix', '')
     
+    # Get continuation token for pagination
+    continuation_token = request.args.get('continuation_token')
+    
     # Allow URL parameters to override the in-memory config
     endpoint_url = request.args.get('endpoint')
     bucket_name = request.args.get('bucket')
@@ -128,11 +131,20 @@ def list_objects():
                     'files': []
                 })
         
-        response = s3_client.list_objects_v2(
-            Bucket=current_bucket,
-            Prefix=prefix,
-            Delimiter='/'
-        )
+        # Set up listing parameters
+        list_params = {
+            'Bucket': current_bucket,
+            'Prefix': prefix,
+            'Delimiter': '/',
+            'MaxKeys': 100  # Reduce from default 1000 to more manageable chunks
+        }
+        
+        # Add continuation token if provided
+        if continuation_token:
+            list_params['ContinuationToken'] = continuation_token
+        
+        # Call S3 with appropriate parameters
+        response = s3_client.list_objects_v2(**list_params)
         
         # Extract folders and files from the S3 response
         folders = []
@@ -164,11 +176,23 @@ def list_objects():
                 'supported': is_supported_type(file_ext, item['Size'])
             })
         
-        return jsonify({
+        # Collect S3 response information for pagination
+        result = {
             'currentPrefix': prefix,
             'folders': folders,
             'files': files
-        })
+        }
+        
+        # Add continuation token if more results exist
+        if response.get('IsTruncated'):
+            result['continuationToken'] = response.get('NextContinuationToken')
+            result['isTruncated'] = True
+        
+        # Add total count from S3 if available
+        if 'KeyCount' in response:
+            result['keyCount'] = response['KeyCount']
+        
+        return jsonify(result)
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500

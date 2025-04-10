@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import BucketExplorer from './components/BucketExplorer';
 import FileViewer from './components/FileViewer';
 import ConfigPanel from './components/ConfigPanel';
@@ -22,6 +22,10 @@ function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(33); // Width in percentage
+  const resizingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
 
   // Get URL parameters
   const getUrlParams = () => {
@@ -110,6 +114,33 @@ function App() {
     };
   }, []);
 
+  // Handle resizing of panels
+  const startResize = (e) => {
+    resizingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = leftPanelWidth;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', stopResize);
+    // Add a class to the body to indicate resizing (for cursor)
+    document.body.classList.add('resizing');
+  };
+
+  const handleMouseMove = (e) => {
+    if (!resizingRef.current) return;
+    const containerWidth = document.querySelector('.panel-container').offsetWidth;
+    const dx = e.clientX - startXRef.current;
+    const newWidth = Math.min(Math.max(10, startWidthRef.current + (dx / containerWidth) * 100), 90);
+    setLeftPanelWidth(newWidth);
+  };
+
+  const stopResize = () => {
+    resizingRef.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', stopResize);
+    // Remove the resizing class
+    document.body.classList.remove('resizing');
+  };
+
   // Save configuration
   const saveConfig = async (newConfig) => {
     try {
@@ -194,6 +225,40 @@ function App() {
     }
   };
 
+  // Add CSS for resizable panels
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .resizable-panel {
+        position: relative;
+      }
+      .resize-handle {
+        position: absolute;
+        right: -5px;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        cursor: col-resize;
+        z-index: 10;
+      }
+      .resize-handle:hover, .resize-handle:active {
+        background-color: rgba(0, 0, 0, 0.1);
+      }
+      body.resizing {
+        cursor: col-resize !important;
+        user-select: none;
+      }
+      body.resizing .resize-handle {
+        background-color: rgba(0, 0, 0, 0.2);
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <header className="bg-blue-600 text-white p-4 shadow-md">
@@ -264,13 +329,21 @@ function App() {
 
       {/* Main content when config is loaded */}
       {!isLoading && !error && config && !isConfigOpen && (
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar - Bucket Explorer */}
-          <div className="w-1/3 border-r border-gray-200 bg-white overflow-auto">
+        <div className="flex flex-1 overflow-hidden panel-container">
+          {/* Left sidebar - Bucket Explorer with resizable width */}
+          <div 
+            className="border-r border-gray-200 bg-white overflow-auto resizable-panel" 
+            style={{ width: `${leftPanelWidth}%` }}
+          >
             <BucketExplorer
               onSelectFile={setSelectedFile}
               currentPath={currentPath}
               onPathChange={handlePathChange}
+            />
+            <div 
+              className="resize-handle" 
+              onMouseDown={startResize}
+              title="Drag to resize panels"
             />
           </div>
 

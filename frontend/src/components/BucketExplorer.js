@@ -8,6 +8,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [initialLoad, setInitialLoad] = useState(true);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageTokens, setPageTokens] = useState([null]); // First page has null token
+  const [nextPageToken, setNextPageToken] = useState(null);
+  
   // Format file size with proper units (B, KB, MB, GB, TB)
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -38,7 +44,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
   };
   
   // Fetch data from the API
-  const fetchBucketContent = async (prefix = '') => {
+  const fetchBucketContent = async (prefix = '', token = null, isPageNavigation = false) => {
     setIsLoading(true);
     setError(null);
     
@@ -54,6 +60,11 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
         url += `&endpoint=${encodeURIComponent(endpoint)}&bucket=${encodeURIComponent(bucket)}`;
       }
       
+      // Add continuation token if provided
+      if (token) {
+        url += `&continuation_token=${encodeURIComponent(token)}`;
+      }
+      
       const response = await axios.get(url);
       
       // Handle case where response is empty (no bucket configured)
@@ -63,13 +74,35 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
         setError('No bucket configured. Please configure a bucket in Settings.');
       } else {
         setBucketContent(response.data);
-        onPathChange(prefix);
         
-        // Update breadcrumbs
-        updateBreadcrumbs(prefix);
+        // Only update path and breadcrumbs when not paginating
+        if (!isPageNavigation) {
+          onPathChange(prefix);
+          updateBreadcrumbs(prefix);
+          updateBrowserUrl(prefix);
+          
+          // Reset pagination when changing directories
+          setCurrentPage(1);
+          setPageTokens([null]); // Reset to first page
+        }
         
-        // Update the browser URL to include the path
-        updateBrowserUrl(prefix);
+        // Update pagination info
+        if (response.data.continuationToken) {
+          setNextPageToken(response.data.continuationToken);
+          
+          // If this is a new page (not just a refresh), add the token to our list
+          if (!isPageNavigation && currentPage === pageTokens.length) {
+            setPageTokens(prev => [...prev, response.data.continuationToken]);
+            setTotalPages(prev => prev + 1);
+          }
+        } else {
+          setNextPageToken(null);
+          // If there's no continuation token and we're on page 1,
+          // then there's only 1 page total
+          if (currentPage === 1 && !isPageNavigation) {
+            setTotalPages(1);
+          }
+        }
       }
     } catch (err) {
       if (err.response?.status === 403) {
@@ -83,6 +116,18 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Function to handle page changes
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber < 1 || pageNumber > totalPages) return;
+    
+    // Get the token for this page
+    const token = pageTokens[pageNumber - 1];
+    
+    // Update state and fetch
+    setCurrentPage(pageNumber);
+    fetchBucketContent(currentPath, token, true);
   };
   
   // Update the browser URL to include the current path
@@ -188,6 +233,18 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     }
   }, [currentPath, initialLoad]);
   
+  // Check for next page token and update pagination
+  useEffect(() => {
+    if (nextPageToken && currentPage === pageTokens.length) {
+      // If we have a next page token and we're on the last known page,
+      // update the tokens list and total pages
+      if (!pageTokens.includes(nextPageToken)) {
+        setPageTokens(prev => [...prev, nextPageToken]);
+        setTotalPages(prev => prev + 1);
+      }
+    }
+  }, [nextPageToken, currentPage, pageTokens]);
+  
   // Handle folder click
   const handleFolderClick = (folderPath) => {
     fetchBucketContent(folderPath);
@@ -259,15 +316,102 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
     return iconMap[extension?.toLowerCase()] || '📄';
   };
   
+  // Render pagination controls
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+    
+    // Calculate which page numbers to show
+    const showPageNums = [];
+    
+    // Always show first page
+    showPageNums.push(1);
+    
+    // Calculate range around current page
+    const rangeStart = Math.max(2, currentPage - 1);
+    const rangeEnd = Math.min(totalPages - 1, currentPage + 1);
+    
+    // Add ellipsis if there's a gap after page 1
+    if (rangeStart > 2) {
+      showPageNums.push('...');
+    }
+    
+    // Add pages in range
+    for (let i = rangeStart; i <= rangeEnd; i++) {
+      showPageNums.push(i);
+    }
+    
+    // Add ellipsis if there's a gap before last page
+    if (rangeEnd < totalPages - 1) {
+      showPageNums.push('...');
+    }
+    
+    // Always show last page if more than 1 page
+    if (totalPages > 1) {
+      showPageNums.push(totalPages);
+    }
+    
+    return (
+      <div className="flex justify-center my-3 bg-white py-2 border-t border-gray-200">
+        <div className="flex items-center space-x-1">
+          {/* Previous button */}
+          <button
+            className={`px-2 py-1 rounded ${
+              currentPage === 1
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-blue-600 hover:bg-blue-50'
+            }`}
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+          >
+            ← Prev
+          </button>
+          
+          {/* Page numbers */}
+          {showPageNums.map((page, index) => (
+            <React.Fragment key={index}>
+              {page === '...' ? (
+                <span className="px-2 text-gray-500">...</span>
+              ) : (
+                <button
+                  className={`px-2 py-1 rounded ${
+                    page === currentPage
+                      ? 'bg-blue-600 text-white'
+                      : 'text-blue-600 hover:bg-blue-50'
+                  }`}
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </button>
+              )}
+            </React.Fragment>
+          ))}
+          
+          {/* Next button */}
+          <button
+            className={`px-2 py-1 rounded ${
+              currentPage === totalPages
+                ? 'text-gray-400 cursor-not-allowed'
+                : 'text-blue-600 hover:bg-blue-50'
+            }`}
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="h-full flex flex-col">
       {/* Breadcrumbs */}
-      <div className="bg-gray-100 p-2 flex flex-wrap items-center text-sm">
+      <div className="bg-gray-100 p-2 flex flex-wrap items-center text-sm overflow-x-auto whitespace-nowrap">
         {breadcrumbs.map((crumb, index) => (
           <React.Fragment key={index}>
             {index > 0 && <span className="mx-1 text-gray-500">/</span>}
             <button 
-              className="hover:text-blue-600 truncate max-w-xs"
+              className="hover:text-blue-600"
               onClick={() => handleBreadcrumbClick(crumb.path)}
             >
               {crumb.name}
@@ -297,7 +441,13 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
           {(bucketContent.folders.length > 0 || bucketContent.files.length > 0) && (
             <div className="bg-blue-50 p-3 border-b border-blue-100 flex justify-between items-center">
               <div className="text-sm text-blue-700">
-                <span className="font-medium">{bucketContent.folders.length}</span> folder{bucketContent.folders.length !== 1 && 's'}, <span className="font-medium">{bucketContent.files.length}</span> file{bucketContent.files.length !== 1 && 's'}
+                <span className="font-medium">{bucketContent.folders.length}</span> folder{bucketContent.folders.length !== 1 && 's'}, 
+                <span className="font-medium">{bucketContent.files.length}</span> file{bucketContent.files.length !== 1 && 's'}
+                {totalPages > 1 && (
+                  <span className="ml-2 text-gray-500">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                )}
               </div>
               {/* Calculate total file size */}
               {bucketContent.files.length > 0 && (
@@ -315,14 +465,14 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
                 <span>Folders</span>
                 <span className="text-xs text-gray-500">{bucketContent.folders.length} item{bucketContent.folders.length !== 1 && 's'}</span>
               </div>
-              <ul>
+              <ul className="divide-y divide-gray-100">
                 {bucketContent.folders.map((folder, index) => (
                   <li key={index}>
                     <button 
                       className="w-full px-4 py-2 hover:bg-blue-50 text-left flex items-center"
                       onClick={() => handleFolderClick(folder.path)}
                     >
-                      <span className="mr-2">📁</span>
+                      <span className="mr-2 flex-shrink-0">📁</span>
                       <span className="truncate">{folder.name}</span>
                     </button>
                   </li>
@@ -341,7 +491,7 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
                   {bucketContent.files.length > 0 && ` • ${formatFileSize(bucketContent.files.reduce((total, file) => total + (file.size || 0), 0))}`}
                 </span>
               </div>
-              <ul>
+              <ul className="divide-y divide-gray-100">
                 {bucketContent.files.map((file, index) => {
                   // Check if file is large (for preview purposes) or special type
                   const isLargeFile = file.size > 104857600; // 100MB
@@ -356,15 +506,12 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
                       <button 
                         className="w-full px-4 py-2 hover:bg-blue-50 text-left flex items-center"
                         onClick={() => handleFileClick(file)}
-                        title={isLargeFile ? 'Large file - preview not available' : 
-                              isArchiveFile ? 'Archive file - preview not available' : 
-                              !file.supported ? 'File type not supported for preview' : ''}
                       >
-                        <span className="mr-2">{getFileIcon(file.extension)}</span>
+                        <span className="mr-2 flex-shrink-0">{getFileIcon(file.extension)}</span>
                         <span className="truncate flex-grow">{file.name}</span>
                         
                         {/* File size and type indicators */}
-                        <div className="flex items-center space-x-2 ml-2">
+                        <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
                           {/* File size indicator */}
                           <span className={`text-xs ${isLargeFile ? 'text-amber-600 font-medium' : 'text-gray-500'}`}>
                             {formattedSize}
@@ -394,6 +541,9 @@ function BucketExplorer({ onSelectFile, currentPath, onPathChange }) {
               </ul>
             </div>
           )}
+          
+          {/* Pagination controls */}
+          {renderPagination()}
           
           {/* Empty state */}
           {bucketContent.folders.length === 0 && bucketContent.files.length === 0 && (
